@@ -676,7 +676,7 @@ const DEFAULT_ENTRY_DEADLINE='20:30';
 // 버전 번호를 올리지 않는 보강 — 어느 기기에서 열어도(옛 빌드 포함) 같은 데이터가 그대로 읽히게 한다
 function ensureCore(st){
   if(!st||typeof st!=='object')return st;
-  if(!Array.isArray(st.sessions_void))st.sessions_void=[];
+  if(!Array.isArray(st.sessions_void))st.sessions_void=[];if(!Array.isArray(st.points_paid))st.points_paid=[];
   for(const l of (st.locations||[]))if(!l.entry_deadline)l.entry_deadline=DEFAULT_ENTRY_DEADLINE;
   st.meta=st.meta||{};ensureHwLineInTemplate(st.meta);
   if(Array.isArray(st.authority_rules)){const have=new Set(st.authority_rules.map(r=>r.code));for(const r of seedAuthority())if(!have.has(r.code))st.authority_rules.push(r);}
@@ -751,7 +751,7 @@ async function cloudPull(){if(!cloudAuthed())throw new Error('로그인 필요')
 const DIRTY_KEY='epl_dirty';
 function dirtySet(on){try{if(on)localStorage.setItem(DIRTY_KEY,String(Date.now()));else localStorage.removeItem(DIRTY_KEY);}catch(e){}}
 function dirtyGet(){try{return localStorage.getItem(DIRTY_KEY);}catch(e){return null;}}
-const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules','sessions_void'];
+const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules','sessions_void','points_paid'];
 function mergeStates(remote,local){
   // 이 기기에 올리지 못한 변경이 있을 때: id 기준 합집합, 같은 id는 이 기기 것 우선
   const out=Object.assign({},remote);
@@ -770,7 +770,9 @@ async function cloudPush(force){if(!cloudAuthed()||CLOUD_STALE)return false;if(C
   try{const who=(currentUser()||{}).name||'';const body={data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who};
     let r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(body)});
     if(!cloudAuthed())return false;
-    let rows=r.ok?await r.json():[];
+    // 서버가 저장 자체를 거부하면(용량·시간 초과 등) 충돌로 착각하지 말고 이유를 그대로 보여준다
+    if(!r.ok)throw await cloudHttpErr(r,body);
+    let rows=await r.json();
     if(r.ok&&rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);CLOUD_LAST=new Date().toTimeString().slice(0,5);cloudSetStatus('동기화됨 · v'+CLOUD_VER+' '+CLOUD_LAST,'b-good');cloudSnapshot();return true;}
     // no row yet, or version conflict
     const cur=await cloudPull();
@@ -778,10 +780,11 @@ async function cloudPush(force){if(!cloudAuthed()||CLOUD_STALE)return false;if(C
     if(!cur){r=await cloudFetch('/rest/v1/epl_state',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(Object.assign({id:'main'},body,{version:1}))});if(!r.ok)throw new Error('업로드 실패 '+r.status);rows=await r.json();CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('첫 업로드 완료 · v1','b-good');return true;}
     if(force){r=await cloudFetch('/rest/v1/epl_state?id=eq.main',{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(Object.assign({},body,{version:cur.version+1}))});rows=r.ok?await r.json():[];if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('저장됨 · v'+CLOUD_VER,'b-good');return true;}throw new Error('덮어쓰기 실패');}
     // 다른 기기가 먼저 저장함 → 합쳐서 다시 올림
-    const o=migrate(cur.data);if(o){S=mergeStates(o,S);cacheState();CLOUD_VER=cur.version;r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who})});rows=r.ok?await r.json():[];if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('합쳐서 저장됨 · v'+CLOUD_VER,'b-good');render();return true;}}
+    const o=migrate(cur.data);if(o){S=mergeStates(o,S);cacheState();CLOUD_VER=cur.version;r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who})});if(!r.ok)throw await cloudHttpErr(r,body);rows=await r.json();if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('합쳐서 저장됨 · v'+CLOUD_VER,'b-good');render();return true;}}
     cloudSetStatus('저장 대기 · 잠시 후 재시도','b-warn');CLOUD_DIRTY=true;setTimeout(()=>cloudPush(false),3000);return false;}
-  catch(e){console.error(e);if(!cloudAuthed())return false;cloudSetStatus('⚠ 서버 저장 안 됨 · 이 기기에만 저장 (재시도 중)','b-bad');CLOUD_DIRTY=true;dirtySet(true);cloudErrToast('서버에 저장하지 못했습니다. 인터넷을 확인하세요. 연결되면 자동으로 올립니다.');clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),15000);return false;}
+  catch(e){console.error(e);if(!cloudAuthed())return false;const why=e&&e.http?e.message:'';cloudSetStatus('⚠ 서버 저장 안 됨'+(why?' ('+why+')':'')+' · 이 기기에만 저장 (재시도 중)','b-bad');CLOUD_DIRTY=true;dirtySet(true);cloudErrToast(why?'서버가 저장을 거부했습니다: '+why+' — 이 문구를 원장님께 알려주세요. 이 기기에는 저장되어 있습니다.':'서버에 저장하지 못했습니다. 인터넷을 확인하세요. 연결되면 자동으로 올립니다.');clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),15000);return false;}
   finally{CLOUD_BUSY=false;if(CLOUD_PENDING){CLOUD_PENDING=false;CLOUD_DIRTY=true;dirtySet(true);clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),500);}}}
+async function cloudHttpErr(r,body){let t='';try{t=(await r.text()).replace(/\s+/g,' ').slice(0,140);}catch(e){}let mb='';try{mb=(JSON.stringify(body).length/1048576).toFixed(1)+'MB';}catch(e){}console.error('cloud save HTTP',r.status,t,'payload',mb);const e=new Error('HTTP '+r.status+(mb?' · 데이터 '+mb:'')+(t?' · '+t:''));e.http=r.status;return e;}
 async function cloudSnapshot(){try{const day=todayISO();const c=cloudCfg();if(c.snap_day===day&&c.snap_at&&Date.now()-c.snap_at<30*60*1000)return;const r=await cloudFetch('/rest/v1/epl_snapshot?on_conflict=day',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({day,data:S,version:CLOUD_VER})});if(r.ok||r.status===201||r.status===204){c.snap_day=day;c.snap_at=Date.now();cloudSave(c);const old=addDays(day,-30);await cloudFetch('/rest/v1/epl_snapshot?day=lt.'+old,{method:'DELETE'});}}catch(e){console.error('snapshot',e);}}
 async function cloudSnapshots(){const r=await cloudFetch('/rest/v1/epl_snapshot?select=day,version,saved_at&order=day.desc');return r.ok?await r.json():[];}
 function cloudQueuePush(){if(!cloudAuthed())return;CLOUD_DIRTY=true;dirtySet(true);clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),800);}
@@ -1218,7 +1221,10 @@ function commentVars(sess){
     태도:sess.attitude?'★'.repeat(sess.attitude)+'☆'.repeat(Math.max(0,5-sess.attitude)):'',
     숙제:sess.homework_notice?'[숙제 안내]\n'+sess.homework_notice:'',녹음:sess.recording_url?'북토킹 녹음: '+sess.recording_url:'',다음등원:nextDay};
 }
-function genComment(sess){const t=stripRoutine(fillTemplate(S.meta.comment_template||DEFAULT_COMMENT_TEMPLATE,commentVars(sess)));return sess.corrected?'※ 앞서 보내드린 알림장을 정정하여 다시 보내드립니다.\n\n'+t:t;}
+function genComment(sess){const v=commentVars(sess);let tpl=S.meta.comment_template||DEFAULT_COMMENT_TEMPLATE;
+  // 템플릿에서 {숙제제출} 줄이 빠져 있어도 숙제 제출 여부는 학부모에게 꼭 전달한다
+  if(!tpl.includes('{숙제제출}')&&v['숙제제출']){const i=tpl.indexOf('{교재진도}');const ls=i<0?-1:tpl.lastIndexOf('\n',i);tpl=ls>=0?tpl.slice(0,ls)+'\n▪ 숙제 확인: {숙제제출}'+tpl.slice(ls):tpl+'\n▪ 숙제 확인: {숙제제출}';}
+  const t=stripRoutine(fillTemplate(tpl,v));return sess.corrected?'※ 앞서 보내드린 알림장을 정정하여 다시 보내드립니다.\n\n'+t:t;}
 
 // --- student chart (학생 차트 = 진료기록) ---
 const ymOf=iso=>iso?iso.slice(0,7):'';
@@ -1287,8 +1293,18 @@ function autoAreaScores(sid,ym){
 }
 function prevYm(ym){const y=Number(ym.slice(0,4)),m=Number(ym.slice(5,7));return m===1?(y-1)+'-12':y+'-'+String(m-1).padStart(2,'0');}
 function areaLevelsOf(sid,ym){const r=reportOf(sid,ym);const auto=autoAreaScores(sid,ym);const names=S.meta.report_areas||DEFAULT_REPORT_AREAS;const out={};for(const name of names){const cur=r&&(r.areas||[]).find(a=>a.name===name);out[name]=normLevel(cur&&cur.level?cur.level:(cur&&cur.score!=null?levelOf(cur.score):(auto[name]!=null?levelOf(auto[name]):'보통')));}return out;}
+// 예전 원서반 리포트(epl-report Firebase)에서 한 달치 영역 등급·문장을 가져와 지난달 비교에 쓴다
+const OLD_REPORT_URL='https://epl-report-default-rtdb.firebaseio.com/'+encodeURIComponent('EPL영어학원')+'/reports.json';
+const OLD_LEVEL={excellent:'우수',good:'보통',developing:'보통',needs:'노력필요'};
+async function importOldReports(ym){const res=await fetch(OLD_REPORT_URL);if(!res.ok)throw new Error('예전 리포트 불러오기 실패 '+res.status);const all=await res.json()||{};
+  const best=new Map();for(const v of Object.values(all)){if(!v||!v.studentName||!Array.isArray(v.categories))continue;if(String(v.date||'').slice(0,7)!==ym)continue;const n=v.studentName.trim();const o=best.get(n);if(!o||(v.savedAt||'')>(o.savedAt||''))best.set(n,v);}
+  const st={found:best.size,added:0,kept:0,unmatched:[]};
+  for(const [name,v] of best){const ss=S.students.filter(s=>s.name.trim()===name);const s=ss.find(x=>x.status==='ACTIVE')||ss[0];if(!s){st.unmatched.push(name);continue;}
+    const r=reportOf(s.id,ym);if(r&&!r.imported_from&&r.status!=='EMPTY'){st.kept++;continue;}
+    saveReport(s.id,ym,{areas:v.categories.filter(c=>c&&c.ko).map(c=>({name:c.ko,level:OLD_LEVEL[c.level]||'보통'})),strengths:v.str||'',improve:v.dev||'',parents:v.par||'',report_date:v.date||'',status:'DONE',imported_from:'eplreport'},null);st.added++;}
+  persist();return st;}
 function monthCompare(sid,ym){
-  const pm=prevYm(ym);const a=monthFacts(sid,pm);const b=monthFacts(sid,ym);if(!a.sessions)return null;
+  const pm=prevYm(ym);const a=monthFacts(sid,pm);const b=monthFacts(sid,ym);if(!a.sessions&&!reportOf(sid,pm))return null;
   const pct=o=>o.total?Math.round(o.done/o.total*100):null;
   const items=[
     ['숙제 완료율',pct(a.hwBook),pct(b.hwBook),'%'],['온라인 학습',pct(a.online),pct(b.online),'%'],['수업태도',a.attitudeAvg,b.attitudeAvg,'/5'],
@@ -1837,8 +1853,10 @@ function progressPreviewHtml(P){
 }
 function ensureUnits(b,n){const us=unitsOf(b);if(us.length>=n)return;const label=b.unit_label||'Unit';for(const u of us)u.is_final=false;for(let i=us.length+1;i<=n;i++)b.units.push({id:b.id+'_u'+i,seq_no:i,unit_name:label+' '+i,is_final:i===n});}
 function applyProgressSheet(P,decisions){
-  const today=todayISO();const stats={students:0,unit:0,switched:0,newBooks:0,notes:0,skipped:0,teacher:0};const newBooks=new Map();const al=bookAliases();
+  const today=todayISO();const stats={students:0,unit:0,switched:0,newBooks:0,notes:0,skipped:0,teacher:0,locked:[]};const newBooks=new Map();const al=bookAliases();
   for(const row of P.rows){if(!row.student)continue;const s=row.student;let changed=[];
+    // 오늘 이미 수업 기록(세션)이 있는 학생은 시트가 진도를 덮어쓰지 않는다 — 수업에서 입력한 진도가 우선
+    if(S.sessions.some(x=>x.student_id===s.id&&x.session_date===today)){stats.locked.push(s.name);continue;}
     if(decisions.teacher&&row.teacherDiff){s.homeroom_teacher_id=row.teacherDiff.id;stats.teacher++;changed.push('담임 → '+row.teacherDiff.name);}
     for(const cell of row.cells){
       if(cell.action==='SKIP'||cell.action==='NONE'){stats.skipped++;continue;}
@@ -1928,7 +1946,7 @@ function viewNotices(q){
   '<div class="bar"><label class="f">날짜<input type="date" class="hq" data-k="date" value="'+date+'"></label><label class="f">지점<select class="hq" data-k="loc"><option value="">전체</option>'+opt(S.locations,loc)+'</select></label><span class="sp"></span>'+
   '<div class="flags">'+badge('b-muted',fmtDateK(date)+' · '+rows.length+'명')+deadlineBadge(date,loc||null)+(missing.length?'<a href="#/home?date='+date+(loc?'&loc='+loc:'')+'" style="text-decoration:none" title="'+h(missing.map(s=>s.name).join(', '))+'">'+badge('b-bad','미입력 '+missing.length+'명')+'</a>':(date<=todayISO()?badge('b-good','전원 입력 완료'):''))+(rows.length?badge(sent===rows.length?'b-good':'b-brass','보냄 '+sent+'/'+rows.length):'')+(corrected?badge('b-warn','정정 재발송 '+corrected):'')+(dups?badge('b-muted','중복 기록 '+dups):'')+'</div>'+
   (rows.length?'<button class="btn p" data-act="copyAll" data-date="'+date+'" data-loc="'+loc+'">전체 복사 ('+rows.length+'명)</button><button class="btn" data-act="markAllSent" data-date="'+date+'" data-loc="'+loc+'">전체 보냄 처리</button>':'')+'</div>'+
-  (rows.length?(()=>{const pa=(S.meta.tools||{}).praise_app;const pts=rows.filter(r=>isPrimarySession(r.x)).map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);return '<div class="panel" style="border-color:var(--brass)"><div class="bar"><b>오늘 포인트 (칭찬모아 지급용)</b><span class="note">세션 기록에서 자동 계산 · 같은 날 중복 기록은 마지막 것만 · '+pts.length+'명 · 합계 '+pts.reduce((n,x)=>n+x.d.total,0)+'P</span><span class="sp"></span><button class="btn s" data-act="copyPoints" data-date="'+date+'" data-loc="'+loc+'">포인트 목록 복사</button>'+(pa?'<a class="btn s b" href="'+h(pa)+'" target="_blank" rel="noopener">칭찬모아 열기 ↗</a>':'')+'</div>'+(pts.length?'<div class="tw"><table class="t" style="font-size:13px"><tbody>'+pts.map(x=>'<tr><td style="white-space:nowrap"><b>'+h(x.r.s.name)+'</b></td><td class="note">'+h(pointsText(x.d))+'</td><td style="text-align:right;white-space:nowrap"><b>'+x.d.total+'P</b></td></tr>').join('')+'</tbody></table></div>':'<p class="note" style="margin:6px 0 0">오늘 포인트가 생긴 학생이 없습니다.</p>')+'<p class="note" style="margin:6px 0 0">칭찬모아는 외부 연동(API)이 없어 자동 지급은 되지 않습니다. 목록을 보고 칭찬모아에서 학생·기준을 골라 지급하세요. 포인트 규칙은 설정에서 바꿉니다.</p></div>';})():'')+
+  (rows.length?(()=>{const pa=(S.meta.tools||{}).praise_app;const pts=pointRows(date,loc);const todo=pts.filter(x=>x.diff!==0).length;return '<div class="panel" style="border-color:var(--brass)"><div class="bar"><b>오늘 포인트 (칭찬모아 지급용)</b><span class="note">세션 기록에서 자동 계산 · 같은 날 중복 기록은 마지막 것만 · '+pts.length+'명 · 합계 '+pts.reduce((n,x)=>n+x.d.total,0)+'P'+(todo?' · 지급할 것 '+todo+'명':' · 모두 지급 완료')+'</span><span class="sp"></span><button class="btn s" data-act="copyPoints" data-date="'+date+'" data-loc="'+loc+'">지급할 포인트 복사</button><button class="btn s p" data-act="markPointsPaid" data-date="'+date+'" data-loc="'+loc+'"'+(todo?'':' disabled')+'>칭찬모아 지급 완료</button>'+(pa?'<a class="btn s b" href="'+h(pa)+'" target="_blank" rel="noopener">칭찬모아 열기 ↗</a>':'')+'</div>'+(pts.length?'<div class="tw"><table class="t" style="font-size:13px"><tbody>'+pts.map(x=>'<tr><td style="white-space:nowrap"><b>'+h(x.s.name)+'</b></td><td class="note">'+h(x.r?pointsText(x.d):'기록 삭제됨')+'</td><td style="text-align:right;white-space:nowrap"><b>'+x.d.total+'P</b>'+(x.paid!=null?'<div class="note" style="color:'+(x.diff===0?'var(--good,#3a7d44)':'var(--bad,#b3412e)')+'">'+h(pointDiffText(x))+'</div>':'')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="note" style="margin:6px 0 0">오늘 포인트가 생긴 학생이 없습니다.</p>')+'<p class="note" style="margin:6px 0 0">칭찬모아는 외부 연동(API)이 없어 자동 지급은 되지 않습니다. 목록을 보고 칭찬모아에서 학생·기준을 골라 지급하세요. 포인트 규칙은 설정에서 바꿉니다.</p></div>';})():'')+
   (rows.length?rows.map(r=>'<div class="panel" id="np_'+r.x.id+'"'+(q.focus===r.x.id?' style="border-color:var(--brass)"':'')+'><div class="bar" style="margin-bottom:8px"><b style="font-size:16px"><a href="#/student/'+r.s.id+'" style="color:inherit;text-decoration:none">'+h(r.s.name)+'</a></b><span class="note">'+h(nameOf(S.locations,r.x.location_id))+' · '+h(nameOf(S.teachers,r.x.teacher_id))+' · '+monthSeq(r.x)+'회차</span><span class="sp"></span>'+(()=>{const li=lateInfo(r.x);const prim=isPrimarySession(r.x);return (prim?'':badge('b-muted','이전 기록 · 중복 (포인트 제외)')+' <button class="btn s d" data-act="delSession" data-id="'+r.x.id+'">이 기록 삭제</button> ')+(li?badge('b-warn','마감 후 입력 '+(li.nextDay?'(다음날) ':'')+li.time)+' ':'')+(r.x.corrected&&!r.x.sent?badge('b-warn','정정 · 다시 보내기')+' ':'')+(prim?'<button class="btn s" data-act="redoSession" data-sid="'+r.s.id+'" data-date="'+date+'" title="이 날짜 기록을 지우고 다시 입력 (진도 되돌림)">기록 수정</button> ':'')+(r.x.sent?badge('b-good','보냄'):badge('b-muted','대기'));})()+'</div>'+
     '<textarea id="nt_cm_'+r.x.id+'" style="min-height:220px">'+h(r.x.daily_comment)+'</textarea><input type="hidden" id="nt_hw_'+r.x.id+'" value="'+h(r.x.homework_notice)+'">'+
     '<div class="bar" style="margin-top:8px"><button class="btn p s" data-act="saveNotice" data-id="'+r.x.id+'">수정 저장</button><button class="btn s" data-act="copyComment" data-id="'+r.x.id+'">복사</button><button class="btn s p" data-act="shareComment" data-id="'+r.x.id+'">공유</button><button class="btn s" data-act="smsComment" data-id="'+r.x.id+'">문자</button><button class="btn s" data-act="regenNotice" data-id="'+r.x.id+'">다시 생성</button><label class="note" style="margin-left:auto"><input type="checkbox" data-act="toggleSent" data-id="'+r.x.id+'"'+(r.x.sent?' checked':'')+'> 보냄</label></div></div>').join(''):
@@ -2062,7 +2080,7 @@ function viewReports(q){
   const rows=S.students.filter(s=>s.status==='ACTIVE').sort((a,b)=>(a.location_id+a.name).localeCompare(b.location_id+b.name,'ko'));
   const done=rows.filter(s=>(reportOf(s.id,ym)||{}).status==='DONE').length;
   return '<h1>월간 리포트</h1><p class="sub">한 달 기록으로 리포트를 만듭니다. 영역별 등급은 시스템이 제안하고, 문장은 메모를 AI가 다듬습니다.</p>'+
-  '<div class="bar"><label class="f">달<select class="hq" data-k="ym">'+months.map(m=>'<option value="'+m+'"'+(m===ym?' selected':'')+'>'+ymLabel(m)+'</option>').join('')+'</select></label><span class="sp"></span>'+badge(done===rows.length&&rows.length?'b-good':'b-muted','완료 '+done+'/'+rows.length)+'</div>'+
+  '<div class="bar"><label class="f">달<select class="hq" data-k="ym">'+months.map(m=>'<option value="'+m+'"'+(m===ym?' selected':'')+'>'+ymLabel(m)+'</option>').join('')+'</select></label><span class="sp"></span>'+(isDirector()?'<button class="btn s" data-act="importOldReports" data-ym="'+prevYm(ym)+'">📥 '+h(ymLabel(prevYm(ym)))+' 예전 리포트 가져오기 (지난달 비교용)</button>':'')+badge(done===rows.length&&rows.length?'b-good':'b-muted','완료 '+done+'/'+rows.length)+'</div>'+
   '<div class="panel tw"><table class="t"><thead><tr><th>학생</th><th>지점</th><th>세션</th><th>원서</th><th>단어</th><th>라이팅</th><th>태도</th><th>리포트</th><th></th></tr></thead><tbody>'+rows.map(s=>{const f=monthFacts(s.id,ym);const r=reportOf(s.id,ym);const st=r?r.status:'EMPTY';return '<tr><td><b>'+h(s.name)+'</b></td><td>'+h(nameOf(S.locations,s.location_id))+'</td><td>'+f.sessions+'회</td><td>'+f.books+'권</td><td>'+(f.vocabAvg!=null?f.vocabAvg+'%':'—')+'</td><td>'+(f.writingAvg!=null?f.writingAvg+'/5':'—')+'</td><td>'+(f.attitudeAvg!=null?f.attitudeAvg:'—')+'</td><td>'+badge(st==='DONE'?'b-good':st==='DRAFT'?'b-warn':'b-muted',st==='DONE'?'완료':st==='DRAFT'?'작성 중':'미작성')+'</td><td><a class="btn s'+(st==='EMPTY'?' p':'')+'" href="#/report/'+s.id+'?ym='+ym+'">'+(st==='EMPTY'?'작성':'열기')+'</a></td></tr>';}).join('')+'</tbody></table></div>';
 }
 function viewReport(id,q){
@@ -2287,6 +2305,12 @@ async function copyText(text){
   try{document.execCommand('copy');toast('복사됨');}catch(e){toast('복사하지 못했습니다. 직접 선택해 복사하세요.');}
   document.body.removeChild(ta);
 }
+// 칭찬모아 지급 기록 — 학생·날짜별로 '이미 준 포인트'를 남겨, 기록을 고쳐도 차이만 다시 지급한다
+const ppId=(sid,date)=>'pp_'+sid+'_'+date;const PP=()=>Array.isArray(S.points_paid)?S.points_paid:(S.points_paid=[]);
+function pointRows(date,loc){const rows=noticeRows(date,loc).filter(r=>isPrimarySession(r.x));const seen=new Set(rows.map(r=>r.s.id));const out=rows.map(r=>{const d=sessionPoints(r.x);const p=byId(PP(),ppId(r.s.id,date));const paid=p?p.paid:null;return{r,s:r.s,d,paid,diff:d.total-(paid||0)};});
+  for(const p of PP().filter(p=>p.date===date&&p.paid>0&&!seen.has(p.student_id))){const s=studentOf(p.student_id);if(s&&(!loc||s.location_id===loc))out.push({r:null,s,d:{total:0},paid:p.paid,diff:-p.paid});}
+  return out.filter(x=>x.d.total>0||x.paid);}
+function pointDiffText(x){if(x.paid==null)return '';if(x.diff===0)return '지급 완료 ✓';return x.diff>0?'추가 지급 +'+x.diff+'P':'회수 '+x.diff+'P';}
 function noticeTextOf(x){const ta=$('#nt_cm_'+x.id);return ta?ta.value:x.daily_comment;}
 function noticeRows(date,loc){return S.sessions.filter(x=>x.session_date===date&&(!loc||x.location_id===loc)).map(x=>({x,s:studentOf(x.student_id)})).filter(r=>r.s).sort((a,b)=>{const ta=(a.s.schedules.find(y=>y.weekday===wdOf(date))||{}).time||'99',tb=(b.s.schedules.find(y=>y.weekday===wdOf(date))||{}).time||'99';return ta.localeCompare(tb)||a.s.name.localeCompare(b.s.name,'ko');});}
 
@@ -2405,8 +2429,8 @@ const ACT={
     const D=redoDay(sid,date);toast('기록 '+(D?D.removed:0)+'건 삭제 · 진도 되돌림'+(D&&D.notes.length?' (일부 제외)':''));nav('session',sid,{date,redo:'1'});},
   async delSession(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const s=studentOf(x.student_id);if(!await ask((s?s.name:'')+' · '+fmtDateK(x.session_date)+' 기록을 삭제합니다. 이 기록이 올린 진도는 되돌리고'+(x.sent?', 보낸 알림장은 그대로 둡니다':'')+'. 계속할까요?'))return;
     const r=deleteSession(x.id,'삭제');toast('기록 삭제됨'+(r&&r.notes.length?' · 되돌리지 못함: '+r.notes.join(' / '):' · 진도 되돌림'));render();},
-  saveNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id),cm=$('#nt_cm_'+x.id);if(hw)x.homework_notice=hw.value.trim();if(cm)x.daily_comment=cm.value.trim();persist();toast('알림장 저장됨');},
-  regenNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id);if(hw)x.homework_notice=hw.value.trim();x.daily_comment=genComment(x);persist();const cm=$('#nt_cm_'+x.id);if(cm)cm.value=x.daily_comment;toast('템플릿으로 다시 생성됨');},
+  saveNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id),cm=$('#nt_cm_'+x.id);if(hw)x.homework_notice=hw.value.trim();if(cm&&cm.value.trim()!==x.daily_comment){x.daily_comment=cm.value.trim();x.comment_edited=true;}persist();toast('알림장 저장됨');},
+  regenNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id);if(hw)x.homework_notice=hw.value.trim();x.daily_comment=genComment(x);delete x.comment_edited;persist();const cm=$('#nt_cm_'+x.id);if(cm)cm.value=x.daily_comment;toast('템플릿으로 다시 생성됨');},
   copyComment(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;copyText(noticeTextOf(x));},
   async shareComment(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const text=noticeTextOf(x);const s=studentOf(x.student_id);
     if(navigator.share){try{await navigator.share({title:(s?s.name:'')+' 알림장',text});x.sent=true;persist();toast('공유됨 · 보냄 처리');render();}catch(e){if(e&&e.name!=='AbortError')toast('공유 실패 — 복사로 보내주세요');}}
@@ -2414,7 +2438,10 @@ const ACT={
   smsComment(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const s=studentOf(x.student_id);const ph=(s&&s.guardian_phone||'').replace(/[^0-9+]/g,'');if(!ph){toast('학부모 연락처가 없습니다. 학생 정보에서 입력하세요.');return;}const text=noticeTextOf(x);const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||'');location.href='sms:'+ph+(ios?'&':'?')+'body='+encodeURIComponent(text);x.sent=true;persist();setTimeout(render,500);},
   toggleSent(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;x.sent=!!el.checked;persist();toast(x.sent?'보냄 처리':'보냄 해제');},
   copyAll(el){const rows=noticeRows(el.dataset.date,el.dataset.loc);if(!rows.length){toast('복사할 알림장이 없습니다.');return;}copyText(rows.map(r=>noticeTextOf(r.x)).join('\n\n────────────\n\n'));},
-  copyPoints(el){const rows=noticeRows(el.dataset.date,el.dataset.loc).filter(r=>isPrimarySession(r.x)).map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);if(!rows.length){toast('복사할 포인트가 없습니다.');return;}copyText(fmtDateK(el.dataset.date)+' 포인트\n'+rows.map(x=>x.r.s.name+' '+x.d.total+'P — '+pointsText(x.d)).join('\n'));},
+  copyPoints(el){const rows=pointRows(el.dataset.date,el.dataset.loc).filter(x=>x.diff!==0);if(!rows.length){toast('새로 지급할 포인트가 없습니다 (모두 지급 완료).');return;}copyText(fmtDateK(el.dataset.date)+' 포인트\n'+rows.map(x=>x.s.name+' '+(x.paid==null?x.d.total+'P — '+pointsText(x.d):(x.diff>0?'+'+x.diff+'P 추가':x.diff+'P 회수')+' (지급 '+x.paid+'P → '+x.d.total+'P)')).join('\n'));},
+  markPointsPaid(el){const date=el.dataset.date;const rows=pointRows(date,el.dataset.loc).filter(x=>x.diff!==0);if(!rows.length){toast('지급할 포인트가 없습니다.');return;}const by=myId(null);for(const x of rows){const id=ppId(x.s.id,date);let p=byId(PP(),id);if(!p){p={id,student_id:x.s.id,date,paid:0};PP().push(p);}p.paid=x.d.total;p.at=new Date().toISOString();p.by=by;}persist();toast(rows.length+'명 지급 완료로 기록');render();},
+  async importOldReports(el){const ym=el.dataset.ym;if(!await ask(ymLabel(ym)+' 예전 원서반 리포트(영역 등급·문장)를 가져와 지난달 비교에 씁니다. EPL OS에서 이미 작성한 '+ymLabel(ym)+' 리포트는 건드리지 않습니다. 계속할까요?'))return;el.disabled=true;el.textContent='가져오는 중…';
+    try{const st=await importOldReports(ym);await ask(ymLabel(ym)+' 예전 리포트 '+st.found+'건 중 '+st.added+'명 가져옴'+(st.kept?' · 이미 작성된 '+st.kept+'명은 그대로 둠':'')+(st.unmatched.length?'\n\n이름이 맞는 학생이 없어 건너뜀 ('+st.unmatched.length+'명): '+st.unmatched.join(', '):''),{alert:true});}catch(e){console.error(e);toast('가져오기 실패: '+e.message);}render();},
   markAllSent(el){for(const r of noticeRows(el.dataset.date,el.dataset.loc))r.x.sent=true;persist();toast('전체 보냄 처리');render();},
   print(){window.print();},
   navMore(){$('#nav').classList.toggle('open');renderNav();},
@@ -2581,9 +2608,9 @@ const ACT={
   bulkTemplate(){copyText(BULK_COLS.join('\t'));},
   progressPreview(){const box=$('#progressBox');if(!box||!box.value.trim()){toast('시트 내용을 붙여 넣으세요.');return;}PROGRESS_PREVIEW=parseProgressSheet(box.value);$('#progressOut').innerHTML=progressPreviewHtml(PROGRESS_PREVIEW);toast('미리보기 · 학생 '+PROGRESS_PREVIEW.rows.filter(r=>r.student).length+'명 매칭');$('#progressOut').scrollIntoView({block:'start'});},
   async progressApply(){const P=PROGRESS_PREVIEW;if(!P){toast('먼저 미리보기를 누르세요.');return;}const map={};for(const el of document.querySelectorAll('.ps_map'))map[el.dataset.key]=el.value;const chap={};for(const el of document.querySelectorAll('.ps_chap')){const v=num(el.value,0);if(v>0)chap[el.dataset.key]=v;}
-    const n=P.rows.filter(r=>r.student).length;if(!await ask('학생 '+n+'명의 교재·Unit을 시트대로 바꿉니다. 바뀐 내용은 학생 차트에 "진도" 기록으로 남고, 되돌리려면 교재 설정에서 고칩니다. 계속할까요?'))return;
+    const n=P.rows.filter(r=>r.student).length;const _now=new Date(),_t=todayISO();const _late=S.locations.some(l=>_now>new Date(_t+'T'+(l.entry_deadline||DEFAULT_ENTRY_DEADLINE)+':00'));const _lk=P.rows.filter(r=>r.student&&S.sessions.some(x=>x.student_id===r.student.id&&x.session_date===_t)).length;if(!await ask((_late?'⚠ 입력 마감 시간이 지났습니다. 오늘 알림장은 이미 나간 진도 기준입니다.\n\n':'')+(_lk?'오늘 수업 기록이 있는 '+_lk+'명은 진도를 바꾸지 않고 건너뜁니다.\n\n':'')+'학생 '+n+'명의 교재·Unit을 시트대로 바꿉니다. 바뀐 내용은 학생 차트에 "진도" 기록으로 남고, 되돌리려면 교재 설정에서 고칩니다. 계속할까요?'))return;
     const st=applyProgressSheet(P,{map,chap,teacher:!!($('#ps_teacher')&&$('#ps_teacher').checked)});PROGRESS_PREVIEW=null;
-    toast('반영 완료 · 학생 '+st.students+'명 · Unit '+st.unit+' · 교재 교체 '+st.switched+' · 새 교재 '+st.newBooks+' · 메모 '+st.notes);render();setTimeout(()=>{const el=$('#progressPanel');if(el)el.scrollIntoView({block:'start'});},50);},
+    toast('반영 완료 · 학생 '+st.students+'명 · Unit '+st.unit+' · 교재 교체 '+st.switched+' · 새 교재 '+st.newBooks+' · 메모 '+st.notes+(st.locked.length?' · 오늘 수업 기록 있어 제외 '+st.locked.length+'명':''));render();if(st.locked.length)ask('오늘 이미 수업 기록이 있는 학생 '+st.locked.length+'명은 시트로 진도를 바꾸지 않았습니다 (수업에서 입력한 진도가 우선):\n'+st.locked.join(', ')+'\n\n이 학생들의 진도를 바꾸려면 학생 페이지 → 교재 설정에서 직접 고치세요.',{alert:true});setTimeout(()=>{const el=$('#progressPanel');if(el)el.scrollIntoView({block:'start'});},50);},
   progressTemplate(){copyText(progressSheetExport(''));toast('현재 진도 시트를 복사했습니다 — 구글 시트에 붙여 넣으세요.');},
   addLocation(){const name=$('#loc_name').value.trim();if(!name){toast('지점 이름을 입력하세요.');$('#loc_name').focus();return;}if(S.locations.some(l=>l.name.trim()===name)){toast('같은 이름의 지점이 있습니다.');return;}
     const base=byId(S.locations,$('#loc_copy').value)||S.locations[0];const l={id:uid('loc'),name,session_minutes:Math.max(10,num($('#loc_min').value,base.session_minutes||80)),flow_order:(base.flow_order||SLOTS).slice(),slot_start:base.slot_start||'14:00',slot_end:base.slot_end||'18:30',slot_min:base.slot_min||15,lead_min:base.lead_min!=null?base.lead_min:45,max_per_hour:base.max_per_hour||8,entry_deadline:base.entry_deadline||DEFAULT_ENTRY_DEADLINE};
@@ -2667,7 +2694,10 @@ function render(){
   try{renderNav();}catch(e){console.error(e);$('#nav').innerHTML=(isDirector()?NAV_DIRECTOR:NAV_TEACHER).map(([r,l])=>'<a href="#/'+r+'" data-r="'+r+'">'+l+'</a>').join('');}document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===navActive()));
   window.scrollTo(0,0);
 }
-function fillMissingNotices(){let n=0;for(const x of S.sessions){if(!x.daily_comment){if(!x.homework_notice)x.homework_notice=genHomeworkNotice(x);x.daily_comment=genComment(x);n++;}}if(n)persist();}
+function fillMissingNotices(){let n=0;const since=isoLocal(new Date(Date.now()-14*864e5));for(const x of S.sessions){
+    // 아직 안 보낸·손대지 않은 최근 알림장인데 숙제 확인 줄이 빠졌으면 다시 만든다
+    if(x.daily_comment&&!x.sent&&!x.comment_edited&&x.session_date>=since&&(x.activities||[]).some(a=>a.activity_type==='HOMEWORK_CHECK')&&!x.daily_comment.includes('숙제 확인')){x.daily_comment=genComment(x);n++;continue;}
+    if(!x.daily_comment){if(!x.homework_notice)x.homework_notice=genHomeworkNotice(x);x.daily_comment=genComment(x);n++;}}if(n)persist();}
 // 부팅: 이 기기 캐시(localStorage → IndexedDB) → 화면 → 공유 저장소 동기화. 확장 모듈은 'epl:ready' 이후에 붙는다.
 async function boot(){
   S=await loadStateAsync();fillMissingNotices();applyTheme();cloudBoot();
