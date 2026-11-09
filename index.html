@@ -350,7 +350,7 @@ const SLOT_L={BOOK:'원서 읽기',HW:'숙제 검사',IP:'오늘 교재(개별�
 const TRACK_ST={IN_PROGRESS:'진행 중',TEST_REQUIRED:'성취테스트 대기',REVIEW_REQUIRED:'복습 필요',RETEST_REQUIRED:'재시험 대기',COMPLETED:'완료',PATH_END:'경로 끝',CHANGED:'교재 변경'};
 const TEST_ST={READY_FOR_TEST:'Test 준비됨',TEST_SCHEDULED:'시험일 지정됨',PASS:'PASS',REVIEW_REQUIRED:'복습 필요',RETEST_REQUIRED:'재시험 대기'};
 const ACT_ST={COMPLETED:'완료',REPEAT:'한 번 더',PARTIAL:'부분',NOT_DONE:'미완료',REVIEW:'복습·오답'};
-const ASSESS_KINDS=['AR','NELT','기타'];
+const ASSESS_KINDS=['AR','RTP','NELT','기타'];
 const RUBRIC=[['acc','문장력',' 문장 정확성·구조'],['idea','사고력',' 내용·논리'],['expr','자기표현',' 표현·분량']];
 const WRITING_TARGET_BY_LEVEL={1:5,2:8,3:12,4:20,5:30};
 const IDEA_CHECKS=[['topic','주제에 맞게 썼다'],['own','자기 생각(주장)이 있다'],['reason','이유를 썼다'],['example','예시·세부 설명이 있다'],['order','순서·연결어(First, Because, So…)가 있다']];
@@ -363,7 +363,17 @@ const RUBRIC_ANCHORS={
  expr:['거의 쓰지 못함','분량 절반 이하, 단어 나열','분량 약간 부족, 표현이 교재 문형에 머묾','요구 분량 충족, 배운 표현을 활용함','요구 분량 이상, 자기 단어·표현으로 씀']
 };
 const HW_DEFAULT={READING_HW:'✔ {교재} {단원} 풀어오세요',GRAMMAR:'✔ {교재} {단원} 본책·워크북 풀어오세요',WRITING:'✔ {교재} {단원} 마무리해 오세요',VOCAB:'✔ {교재} {단원}까지 온라인 학습 해오세요'};
-const DEFAULT_COMMENT_TEMPLATE='안녕하세요, {학원}입니다.\n{학생} 학생의 {날짜} 학습 내용을 안내드립니다.\n\n▪ 원서 읽기: {원서}\n▪ 개별 진도: {교재진도}\n▪ 라이팅: {라이팅}\n▪ 단어 시험: {단어}\n▪ 수업태도: {태도}\n\n{숙제}\n\n{녹음}\n감사합니다.';
+const DEFAULT_COMMENT_TEMPLATE='안녕하세요, {학원}입니다.\n{학생} 학생의 {날짜} 학습 내용을 안내드립니다.\n\n▪ 원서 읽기: {원서}\n▪ 숙제 확인: {숙제제출}\n▪ 개별 진도: {교재진도}\n▪ 라이팅: {라이팅}\n▪ 단어 시험: {단어}\n▪ 수업태도: {태도}\n\n{숙제}\n\n{녹음}\n감사합니다.';
+// 기존에 저장된 알림장 템플릿에 '숙제 확인' 줄이 없으면 한 번만 끼워 넣는다 (원장이 지운 뒤에는 다시 넣지 않음)
+function ensureHwLineInTemplate(meta){
+  if(!meta||meta.tpl_hw_added)return false;const tpl=typeof meta.comment_template==='string'?meta.comment_template:'';meta.tpl_hw_added=true;
+  if(!tpl.trim()||tpl.includes('{숙제제출}'))return false;
+  const lines=tpl.split('\n');let i=lines.findIndex(l=>l.includes('{교재진도}'));
+  if(i>=0){lines.splice(i,0,'▪ 숙제 확인: {숙제제출}');}
+  else{i=lines.findIndex(l=>l.includes('{숙제}'));if(i>=0)lines.splice(i,0,'▪ 숙제 확인: {숙제제출}','');else lines.push('','▪ 숙제 확인: {숙제제출}');}
+  meta.comment_template=lines.join('\n');return true;
+}
+const HW_PARENT_ST={COMPLETED:'완료',REPEAT:'완료 (한 번 더 연습)',PARTIAL:'일부 완료',NOT_DONE:'미제출',REVIEW:'복습'};
 const ROUTINE_LINE=/^[ \t]*가정에서\s*오늘의\s*루틴.*(\r?\n|$)/gm;
 const stripRoutine=t=>typeof t==='string'?t.replace(ROUTINE_LINE,'').replace(/\n{3,}/g,'\n\n'):t;
 const DEFAULT_REPORT_PROMPT='당신은 EPL영어학원 선생님입니다. 아래 지침을 반드시 따르십시오.\n\n# 지침\n1. 호칭: 성을 제외하고 \'이름+이가/가\' 형식을 사용하십시오.\n2. 사실만 기술: 입력되지 않은 내용은 절대 지어내지 마십시오. 아래 [이 달의 기록]에 있는 사실만 근거로 쓰십시오.\n3. 각 항목(강점 / 세밀한 보완이 필요한 부분 / 학부모님께 드리는 메시지)을 5~8줄로 작성하십시오. 한 문장이 한 줄입니다.\n4. 문체: \'~요\' 체를 쓰지 말고 \'~습니다\' \'~입니다\' 체로만 작성하십시오. AI가 쓴 티가 나지 않게 선생님이 직접 쓴 것처럼 담백하게 작성하십시오.\n5. 금지 표현: \'~한 자산입니다\', \'기초 지식이 풍부하다\', \'안정적이다\', \'탄탄하다\', \'인상적입니다\' 및 과장된 칭찬. \'훈련\' 대신 \'연습\'을 쓰십시오.\n6. 학부모 메시지는 결과보다 과정(성장, 루틴, 문장력, 사고력, 자기표현)을 강조하고, 한 문장에 한 가지만 담으십시오.\n7. 언어: 반드시 한국어로만 작성하십시오.\n8. 지난달 비교: [지난달 비교]가 있으면 세 항목 모두에 지난달 대비 무엇이 올랐고 무엇이 내렸는지 숫자와 함께 최소 한 줄씩 넣으십시오. 변화가 없으면 \'지난달과 같은 수준\'이라고 쓰십시오. [지난달 비교]가 없으면 비교 문장을 쓰지 마십시오.\n\n반드시 아래 JSON 형식으로만 응답하세요:\n{"strengths":"내용","dev":"내용","parent":"내용"}';
@@ -374,9 +384,9 @@ const REPORT_LEVELS=[['우수',3],['보통',2],['노력필요',1]];
 const LEVEL_ALIAS={'양호':'보통','노력':'노력필요'};const normLevel=l=>l?(LEVEL_ALIAS[l]||l):l;
 const levelOf=sc=>sc==null?null:sc>=4?'우수':sc>=2.5?'보통':'노력필요';
 const levelScore=l=>{const f=REPORT_LEVELS.find(x=>x[0]===normLevel(l));return f?f[1]:null;};
-const TEMPLATE_VARS=['학원','학생','날짜','강사','원서','교재진도','라이팅','단어','태도','숙제','녹음','다음등원'];
+const TEMPLATE_VARS=['학원','학생','날짜','강사','원서','숙제제출','교재진도','라이팅','단어','태도','숙제','녹음','다음등원'];
 const fmtDateK=iso=>{if(!iso)return'';const d=new Date(iso+'T00:00:00');return (d.getMonth()+1)+'월 '+d.getDate()+'일 ('+WD[d.getDay()]+')';};
-const RULE_L={HW_MISS:'숙제 미완료 반복',UNIT_REPEAT:'동일 Unit 반복',VOCAB_RETEST:'단어 재시험 반복',QUIZ_LOW:'원서 Quiz 저점',TEST_FAIL:'성취테스트 미달',STAGNATION:'교재 정체',WRITING_MISS:'Writing 미완료 반복',DECLINE:'성취도 하락',OVERRIDE_REPEAT:'Override 반복',PATH_END:'다음 교재 없음',RETEST_ESCALATION:'재시험 연속 FAIL'};
+const RULE_L={HW_MISS:'숙제 미완료 반복',HW_MISS_DIRECTOR:'숙제 미제출 누적 (원장 보고)',UNIT_REPEAT:'동일 Unit 반복',VOCAB_RETEST:'단어 재시험 반복',QUIZ_LOW:'원서 Quiz 저점',TEST_FAIL:'성취테스트 미달',STAGNATION:'교재 정체',WRITING_MISS:'Writing 미완료 반복',DECLINE:'성취도 하락',OVERRIDE_REPEAT:'Override 반복',PATH_END:'다음 교재 없음',RETEST_ESCALATION:'재시험 연속 FAIL',TEST_DUE_RTP:'RTP 테스트 시기',TEST_DUE_NELT:'NELT 테스트 시기'};
 const WD=['일','월','화','수','목','금','토'];
 const EVENT_TYPES={ABSENCE:'결석',INQUIRY:'학부모 문의',COMPLAINT:'학부모 불만',PAUSE:'휴원 요청',WITHDRAW:'퇴원 요청'};
 const LEVEL_L={TEACHER:'강사 단독',REPORT:'보고 후 결정',DIRECTOR:'원장 결정'};
@@ -399,7 +409,10 @@ const DEFAULT_AUTHORITY=[
  ['COMPLAINT','학부모 불만','REPORT','당일 원장에게 공유하고, 답변은 원장 확인 후 보낸다',24,'사실만 한 줄로 적고 [보고하기]','m_complaint'],
  ['PAUSE','휴원 요청','DIRECTOR','24시간 내 원장이 회신한다',24,'[결정 요청] — 승인 시 학생 상태가 휴원으로 바뀜','m_withdraw'],
  ['WITHDRAW','퇴원·환불 요청','DIRECTOR','24시간 내 원장이 회신한다',24,'[결정 요청] — 승인 시 학생 상태가 퇴원으로 바뀜','m_withdraw'],
- ['SESSION_INCOMPLETE','세션 미기록·알림장 미발송','TEACHER','당일 22시까지 세션 기록과 알림장 발송을 끝낸다',24,'세션 입력 → 알림장 보냄 체크','m_complete']
+ ['SESSION_INCOMPLETE','세션 미기록·알림장 미발송','TEACHER','당일 22시까지 세션 기록과 알림장 발송을 끝낸다',24,'세션 입력 → 알림장 보냄 체크','m_complete'],
+ ['HW_MISS_DIRECTOR','숙제 미제출 누적 (기간 내 3회 이상)','REPORT','담임이 학부모와 통화한 뒤 원장에게 보고하고, 원장이 상담 여부를 정한다',48,'통화 내용을 한 줄로 적고 [보고하기] → 원장 결정','m_hw_miss'],
+ ['TEST_DUE_RTP','RTP 재검사 시기','TEACHER','마지막 테스트 후 3개월이 지나면 2주 안에 RTP를 실시하고 결과를 평가 기록에 입력한다',336,'학생 상세 → 평가 기록에 RTP 결과 입력 → 자동 해결',''],
+ ['TEST_DUE_NELT','NELT 재검사 시기','TEACHER','마지막 테스트 후 3개월이 지나면 2주 안에 NELT를 실시하고 결과를 평가 기록에 입력한다',336,'학생 상세 → 평가 기록에 NELT 결과 입력 → 자동 해결','']
 ];
 const DEFAULT_MANUALS=[
  {id:'m_absence',title:'결석 학생 보강 처리',done:'보강일이 OS에 입력되고 학부모 안내가 발송됨',steps:['Home 카드에서 "결석" 탭','2주 안의 빈 시간 확인','예외 처리함에서 보강일 입력','안내 문안 복사해 발송','처리 완료'],rules:'2주 내 불가 → 다음 2주로 1회 연장 가능. 두 번째 연장은 보고.',escalate:'담당 강사 → 원장(승인함)',metric:'보강 처리율 = 2주 내 완료 / 결석 건수',codes:['ABSENCE']},
@@ -592,7 +605,9 @@ function seed(){
       STAGNATION:{multiplier:1.5},
       WRITING_MISS:{streak:3},
       DECLINE:{window:5,drop_pp:15},
-      OVERRIDE_REPEAT:{count:3,days:30}
+      OVERRIDE_REPEAT:{count:3,days:30},
+      HW_MISS_DIRECTOR:{count:3,days:30},
+      TEST_DUE:{rtp_months:3,nelt_months:3}
     }
   };
 }
@@ -648,7 +663,19 @@ function migrate(s){
     for(const x of (s.sessions||[]))if(typeof x.daily_comment==='string')x.daily_comment=x.daily_comment.replace(ROUTINE_LINE,'');
   }
   if(s.version===11){s.version=12;s.issues=s.issues||[];s.stock=s.stock||[];for(const l of (s.locations||[]))if(l.max_per_hour==null)l.max_per_hour=8;}
-  return s.version===12?s:null;
+  return s.version===12?ensureCore(s):null;
+}
+const STATE_VERSION=12;
+const DEFAULT_ENTRY_DEADLINE='20:30';
+// 버전 번호를 올리지 않는 보강 — 어느 기기에서 열어도(옛 빌드 포함) 같은 데이터가 그대로 읽히게 한다
+function ensureCore(st){
+  if(!st||typeof st!=='object')return st;
+  if(!Array.isArray(st.sessions_void))st.sessions_void=[];
+  for(const l of (st.locations||[]))if(!l.entry_deadline)l.entry_deadline=DEFAULT_ENTRY_DEADLINE;
+  st.meta=st.meta||{};ensureHwLineInTemplate(st.meta);
+  if(Array.isArray(st.authority_rules)){const have=new Set(st.authority_rules.map(r=>r.code));for(const r of seedAuthority())if(!have.has(r.code))st.authority_rules.push(r);}
+  st.rules=st.rules||{};if(!st.rules.HW_MISS_DIRECTOR)st.rules.HW_MISS_DIRECTOR={count:3,days:30};if(!st.rules.TEST_DUE)st.rules.TEST_DUE={rtp_months:3,nelt_months:3};
+  return st;
 }
 function rosterSeed(){
   // 샘플 대신 노션 진도리스트(2026-10-16) 재원생으로 시작 — 새 기기에서 처음 열 때
@@ -658,8 +685,23 @@ function rosterSeed(){
   try{const r=parseBulk(NOTION_ROSTER_2026_10_16);bulkCommit(r);}catch(e){console.error('roster seed failed',e);}
   const out=S;if(prev!==undefined)S=prev;return out;
 }
-function loadState(){
-  let st=null;try{const raw=localStorage.getItem(KEY);if(raw){st=migrate(JSON.parse(raw));}}catch(e){}
+// 이 기기 캐시: localStorage(빠름) + IndexedDB(용량 넉넉) 두 곳에 같이 둔다. localStorage가 가득 차도 저장은 계속된다.
+const STATE_IDB_KEY='__epl_state__';
+let LS_FULL=false;
+function cacheState(st){
+  const json=JSON.stringify(st||S);
+  try{localStorage.setItem(KEY,json);LS_FULL=false;}
+  catch(e){LS_FULL=true;try{localStorage.removeItem(KEY);}catch(e2){}}
+  putPhoto(STATE_IDB_KEY,json).then(ok=>{if(!ok&&LS_FULL&&!cacheState._warned){cacheState._warned=true;toast('이 기기의 저장 공간이 부족합니다. 서버 저장은 계속되지만 오프라인에서는 열 수 없습니다.');}});
+}
+async function readCachedRaw(){
+  try{const raw=localStorage.getItem(KEY);if(raw)return raw;}catch(e){}
+  try{const raw=await getPhoto(STATE_IDB_KEY);if(typeof raw==='string'&&raw)return raw;}catch(e){}
+  return null;
+}
+async function loadStateAsync(){let st=null;try{const raw=await readCachedRaw();if(raw)st=migrate(JSON.parse(raw));}catch(e){console.error(e);}return loadState(st);}
+function loadState(st){
+  st=st||null;
   if(!st){st=rosterSeed();}for(const k of ['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','authority_rules','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock'])if(!Array.isArray(st[k]))st[k]=k==='authority_rules'&&typeof seedAuthority==='function'?seedAuthority():[];st.meta=st.meta||{};st.rules=st.rules||seed().rules;for(const l of st.locations)if(l.max_per_hour==null)l.max_per_hour=8;
   if(st.meta)st.meta.comment_template=stripRoutine(st.meta.comment_template);
   {const have=new Set((st.manuals||[]).map(m=>m.id));for(const m of seedManuals())if(!have.has(m.id))st.manuals.push(m);}
@@ -669,12 +711,12 @@ function loadState(){
     if(sids.size){st.students=st.students.filter(x=>!sids.has(x.id));for(const k of ['tracks','sessions','alerts','events','approvals','assessments','chart_notes','monthly_reports','completion_tests','issues'])st[k]=(st[k]||[]).filter(x=>!sids.has(x.student_id));st.overrides=(st.overrides||[]).filter(o=>!sids.has(o.student_id));}
     for(const tid of ['t_kim','t_lee']){const used=st.students.some(x=>x.homeroom_teacher_id===tid)||st.sessions.some(x=>x.teacher_id===tid);if(!used)st.teachers=st.teachers.filter(t=>t.id!==tid);}
     const prev=typeof S!=='undefined'?S:undefined;S=st;try{bulkCommit(parseBulk(NOTION_ROSTER_2026_10_16));}catch(e){console.error(e);}if(prev!==undefined)S=prev;
-    st.meta.seeded_roster='2026-10-16';try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}
+    st.meta.seeded_roster='2026-10-16';cacheState(st);
   }for(const x of (st.sessions||[]))x.daily_comment=stripRoutine(x.daily_comment);st.meta.tools=st.meta.tools||{};const T=st.meta.tools;if(T.test_builder===undefined)T.test_builder='https://ahyoungkim0802-web.github.io/epl-report/';if(T.report_library===undefined)T.report_library='https://ahyoungkim0802-web.github.io/eplreport-library/';if(T.rank_system===undefined)T.rank_system='https://ahyoungkim0802-web.github.io/epl-rank-system/';if(T.praise_app===undefined)T.praise_app='https://mcorp.chingchanmoa.com/main_v_99';
-  st.meta.points=Object.assign({unit_done:10,hw_done:3,online_done:2,vocab_pass:5,vocab_check:2,test_pass:50,attitude5:2,book_read:5,writing_piece:5},st.meta.points||{});return st;
+  st.meta.points=Object.assign({unit_done:10,hw_done:3,online_done:2,vocab_pass:5,vocab_check:2,test_pass:50,attitude5:2,book_read:5,writing_piece:5},st.meta.points||{});ensureCore(st);return st;
 }
 function persist(){
-  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('저장하지 못했습니다. 브라우저 저장 공간을 확인하세요.');}
+  cacheState();
   cloudQueuePush();
 }
 // ===== 공유 저장소 (Supabase) — 어디서 열어도 같은 데이터 =====
@@ -683,58 +725,70 @@ function cloudCfg(){try{return JSON.parse(localStorage.getItem(CLOUD_KEY)||'null
 function cloudSave(c){try{localStorage.setItem(CLOUD_KEY,JSON.stringify(c));}catch(e){}}
 function cloudOn(){const c=cloudCfg();return !!(c.url&&c.key);}
 function cloudAuthed(){const c=cloudCfg();return cloudOn()&&!!c.token;}
-let CLOUD_VER=0,CLOUD_TIMER=null,CLOUD_BUSY=false,CLOUD_DIRTY=false,CLOUD_LAST='';
+let CLOUD_VER=0,CLOUD_TIMER=null,CLOUD_BUSY=false,CLOUD_DIRTY=false,CLOUD_LAST='',CLOUD_PENDING=false,CLOUD_STALE=false;
 const cloudStatus={text:'',cls:'b-muted'};
 function cloudSetStatus(t,cls){cloudStatus.text=t;cloudStatus.cls=cls||'b-muted';const el=$('#cloudBadge');if(el){el.textContent=t;el.className='badge '+cloudStatus.cls;el.style.display=t?'':'none';}}
-async function cloudFetch(path,opts){const c=cloudCfg();opts=opts||{};const h=Object.assign({'apikey':c.key,'Content-Type':'application/json'},opts.headers||{});if(c.token&&!opts.noAuth)h['Authorization']='Bearer '+c.token;
+async function cloudFetch(path,opts){opts=opts||{};
+  let c=cloudCfg();if(c.token&&c.refresh&&c.exp&&Date.now()>c.exp-60000&&!opts.noAuth&&!opts._retried){await cloudRefresh();c=cloudCfg();}
+  const h=Object.assign({'apikey':c.key,'Content-Type':'application/json'},opts.headers||{});if(c.token&&!opts.noAuth)h['Authorization']='Bearer '+c.token;
   let r=await fetch(c.url.replace(/\/$/,'')+path,Object.assign({},opts,{headers:h}));
-  if(r.status===401&&c.refresh&&!opts._retried){const ok=await cloudRefresh();if(ok)return cloudFetch(path,Object.assign({},opts,{_retried:true}));}
+  if(r.status===401&&!opts.noAuth&&!opts._retried){const ok=c.refresh?await cloudRefresh():false;if(ok)return cloudFetch(path,Object.assign({},opts,{_retried:true}));cloudExpire();}
   return r;}
+// 로그인 만료: 오류 토스트를 반복하지 않고 연결 화면으로 보낸다. 이 기기의 미반영 변경은 dirty 표시로 남아 다시 로그인하면 합쳐서 올라간다.
+function cloudExpire(){const c=cloudCfg();if(!c.token&&!c.refresh)return;delete c.token;delete c.refresh;delete c.exp;cloudSave(c);clearTimeout(CLOUD_TIMER);cloudSetStatus('로그인 만료 · 다시 로그인','b-bad');toast('공유 저장소 로그인이 만료되었습니다. 다시 로그인하면 이 기기의 기록이 이어서 올라갑니다.');setTimeout(render,80);}
 async function cloudLogin(email,pass){const c=cloudCfg();const r=await fetch(c.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':c.key,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
   const j=await r.json().catch(()=>({}));if(!r.ok||!j.access_token)throw new Error(j.error_description||j.msg||j.message||'로그인 실패 ('+r.status+')');
   c.token=j.access_token;c.refresh=j.refresh_token;c.email=email;c.exp=Date.now()+(j.expires_in||3600)*1000;cloudSave(c);return true;}
-async function cloudRefresh(){const c=cloudCfg();if(!c.refresh)return false;try{const r=await fetch(c.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':c.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:c.refresh})});const j=await r.json();if(!r.ok||!j.access_token){return false;}c.token=j.access_token;c.refresh=j.refresh_token||c.refresh;c.exp=Date.now()+(j.expires_in||3600)*1000;cloudSave(c);return true;}catch(e){return false;}}
+async function cloudRefresh(){if(cloudRefresh._p)return cloudRefresh._p;cloudRefresh._p=(async()=>{const c=cloudCfg();if(!c.refresh)return false;try{const r=await fetch(c.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':c.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:c.refresh})});const j=await r.json().catch(()=>({}));if(!r.ok||!j.access_token){return false;}const c2=cloudCfg();c2.token=j.access_token;c2.refresh=j.refresh_token||c2.refresh;c2.exp=Date.now()+(j.expires_in||3600)*1000;cloudSave(c2);return true;}catch(e){return false;}})();try{return await cloudRefresh._p;}finally{cloudRefresh._p=null;}}
 function cloudLogout(){const c=cloudCfg();delete c.token;delete c.refresh;delete c.exp;cloudSave(c);}
-async function cloudPull(){if(!cloudAuthed())return null;const r=await cloudFetch('/rest/v1/epl_state?id=eq.main&select=data,version,updated_at,updated_by');if(!r.ok)throw new Error('불러오기 실패 '+r.status);const rows=await r.json();return rows[0]||null;}
+async function cloudPull(){if(!cloudAuthed())throw new Error('로그인 필요');const r=await cloudFetch('/rest/v1/epl_state?id=eq.main&select=data,version,updated_at,updated_by');if(!r.ok)throw new Error('불러오기 실패 '+r.status);const rows=await r.json();return rows[0]||null;}
 const DIRTY_KEY='epl_dirty';
 function dirtySet(on){try{if(on)localStorage.setItem(DIRTY_KEY,String(Date.now()));else localStorage.removeItem(DIRTY_KEY);}catch(e){}}
 function dirtyGet(){try{return localStorage.getItem(DIRTY_KEY);}catch(e){return null;}}
-const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules'];
+const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules','sessions_void'];
 function mergeStates(remote,local){
   // 이 기기에 올리지 못한 변경이 있을 때: id 기준 합집합, 같은 id는 이 기기 것 우선
   const out=Object.assign({},remote);
+  const voided=new Set([...(remote.sessions_void||[]),...(local.sessions_void||[])].map(x=>x.id));
   for(const k of MERGE_COLLECTIONS){const R=Array.isArray(remote[k])?remote[k]:[],L=Array.isArray(local[k])?local[k]:[];
     const keyOf=x=>x.id||(k==='stock'?x.book_id+'|'+(x.teacher_id||''):k==='authority_rules'?x.code:JSON.stringify(x));
-    const m=new Map();for(const x of R)m.set(keyOf(x),x);for(const x of L)m.set(keyOf(x),x);out[k]=[...m.values()];}
+    const m=new Map();for(const x of R)m.set(keyOf(x),x);for(const x of L)m.set(keyOf(x),x);out[k]=[...m.values()];
+    if(k==='sessions')out[k]=out[k].filter(x=>!voided.has(x.id));}
   out.meta=Object.assign({},local.meta||{},remote.meta||{});out.rules=remote.rules||local.rules;out.levels=remote.levels||local.levels;
   // 학생 상태(기본 교재·일정)는 이 기기 것 우선 — 위 합집합에서 이미 local 우선
   return out;}
-async function cloudPush(force){if(!cloudAuthed()||CLOUD_BUSY)return false;CLOUD_BUSY=true;
+// 공유 저장소의 데이터가 이 빌드보다 새 형식이면(다른 기기가 새 버전을 먼저 열었음) 덮어쓰지 않고 새로고침을 안내한다
+function cloudNewerThanMe(cur){const v=cur&&cur.data?num(cur.data.version,0):0;if(v<=STATE_VERSION)return false;if(!CLOUD_STALE){CLOUD_STALE=true;cloudSetStatus('새 버전이 배포됨 · 새로고침하세요','b-warn');if(!(CLOUD_DIRTY||dirtyGet())){try{if(!sessionStorage.getItem('epl_reloaded')){sessionStorage.setItem('epl_reloaded','1');setTimeout(()=>location.reload(),1200);}}catch(e){}}else toast('새 버전이 배포되었습니다. 이 화면의 입력을 마친 뒤 새로고침하세요.');}return true;}
+function cloudErrToast(msg){const now=Date.now();if(cloudErrToast._t&&now-cloudErrToast._t<600000)return;cloudErrToast._t=now;toast(msg);}
+async function cloudPush(force){if(!cloudAuthed()||CLOUD_STALE)return false;if(CLOUD_BUSY){CLOUD_PENDING=true;return false;}CLOUD_BUSY=true;
   try{const who=(currentUser()||{}).name||'';const body={data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who};
     let r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(body)});
+    if(!cloudAuthed())return false;
     let rows=r.ok?await r.json():[];
     if(r.ok&&rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);CLOUD_LAST=new Date().toTimeString().slice(0,5);cloudSetStatus('동기화됨 · v'+CLOUD_VER+' '+CLOUD_LAST,'b-good');cloudSnapshot();return true;}
     // no row yet, or version conflict
     const cur=await cloudPull();
+    if(cloudNewerThanMe(cur)){CLOUD_DIRTY=true;dirtySet(true);return false;}
     if(!cur){r=await cloudFetch('/rest/v1/epl_state',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(Object.assign({id:'main'},body,{version:1}))});if(!r.ok)throw new Error('업로드 실패 '+r.status);rows=await r.json();CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('첫 업로드 완료 · v1','b-good');return true;}
     if(force){r=await cloudFetch('/rest/v1/epl_state?id=eq.main',{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(Object.assign({},body,{version:cur.version+1}))});rows=r.ok?await r.json():[];if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('저장됨 · v'+CLOUD_VER,'b-good');return true;}throw new Error('덮어쓰기 실패');}
     // 다른 기기가 먼저 저장함 → 합쳐서 다시 올림
-    const o=migrate(cur.data);if(o){S=mergeStates(o,S);try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}CLOUD_VER=cur.version;r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who})});rows=r.ok?await r.json():[];if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('합쳐서 저장됨 · v'+CLOUD_VER,'b-good');render();return true;}}
+    const o=migrate(cur.data);if(o){S=mergeStates(o,S);cacheState();CLOUD_VER=cur.version;r=await cloudFetch('/rest/v1/epl_state?id=eq.main&version=eq.'+CLOUD_VER,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({data:S,version:CLOUD_VER+1,updated_at:new Date().toISOString(),updated_by:who})});rows=r.ok?await r.json():[];if(rows.length){CLOUD_VER=rows[0].version;CLOUD_DIRTY=false;dirtySet(false);cloudSetStatus('합쳐서 저장됨 · v'+CLOUD_VER,'b-good');render();return true;}}
     cloudSetStatus('저장 대기 · 잠시 후 재시도','b-warn');CLOUD_DIRTY=true;setTimeout(()=>cloudPush(false),3000);return false;}
-  catch(e){console.error(e);cloudSetStatus('⚠ 서버 저장 안 됨 · 이 기기에만 저장 (재시도 중)','b-bad');CLOUD_DIRTY=true;dirtySet(true);toast('서버에 저장하지 못했습니다. 인터넷을 확인하세요. 연결되면 자동으로 올립니다.');clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),15000);return false;}
-  finally{CLOUD_BUSY=false;}}
+  catch(e){console.error(e);if(!cloudAuthed())return false;cloudSetStatus('⚠ 서버 저장 안 됨 · 이 기기에만 저장 (재시도 중)','b-bad');CLOUD_DIRTY=true;dirtySet(true);cloudErrToast('서버에 저장하지 못했습니다. 인터넷을 확인하세요. 연결되면 자동으로 올립니다.');clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),15000);return false;}
+  finally{CLOUD_BUSY=false;if(CLOUD_PENDING){CLOUD_PENDING=false;CLOUD_DIRTY=true;dirtySet(true);clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),500);}}}
 async function cloudSnapshot(){try{const day=todayISO();const c=cloudCfg();if(c.snap_day===day&&c.snap_at&&Date.now()-c.snap_at<30*60*1000)return;const r=await cloudFetch('/rest/v1/epl_snapshot?on_conflict=day',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({day,data:S,version:CLOUD_VER})});if(r.ok||r.status===201||r.status===204){c.snap_day=day;c.snap_at=Date.now();cloudSave(c);const old=addDays(day,-30);await cloudFetch('/rest/v1/epl_snapshot?day=lt.'+old,{method:'DELETE'});}}catch(e){console.error('snapshot',e);}}
 async function cloudSnapshots(){const r=await cloudFetch('/rest/v1/epl_snapshot?select=day,version,saved_at&order=day.desc');return r.ok?await r.json():[];}
 function cloudQueuePush(){if(!cloudAuthed())return;CLOUD_DIRTY=true;dirtySet(true);clearTimeout(CLOUD_TIMER);CLOUD_TIMER=setTimeout(()=>cloudPush(false),800);}
 async function cloudBoot(){if(!cloudAuthed())return;cloudSetStatus('연결 중…','b-muted');
   try{const cur=await cloudPull();const unsynced=!!dirtyGet();
+    if(cloudNewerThanMe(cur))return;
     if(cur&&cur.data){const o=migrate(cur.data);if(o){for(const k of ['issues','stock'])if(!Array.isArray(o[k]))o[k]=[];
-      if(unsynced){S=mergeStates(o,S);CLOUD_VER=cur.version||1;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}cloudSetStatus('올리지 못한 기록 합치는 중…','b-warn');fillMissingNotices();applyTheme();render();await cloudPush(false);}
-      else{S=o;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}CLOUD_VER=cur.version||1;cloudSetStatus('동기화됨 · v'+CLOUD_VER,'b-good');fillMissingNotices();applyTheme();render();}}}
+      if(unsynced){S=mergeStates(o,S);CLOUD_VER=cur.version||1;cacheState();cloudSetStatus('올리지 못한 기록 합치는 중…','b-warn');fillMissingNotices();applyTheme();render();await cloudPush(false);}
+      else{S=o;cacheState();CLOUD_VER=cur.version||1;cloudSetStatus('동기화됨 · v'+CLOUD_VER,'b-good');fillMissingNotices();applyTheme();render();}}}
     else{await cloudPush(false);}
     setInterval(cloudPoll,20000);window.addEventListener('online',()=>{if(CLOUD_DIRTY||dirtyGet())cloudPush(false);});}
-  catch(e){console.error(e);cloudSetStatus('⚠ 서버 연결 안 됨 · 이 기기에만 저장 (재시도 중)','b-bad');setTimeout(cloudBoot,20000);}}
-async function cloudPoll(){if(!cloudAuthed()||CLOUD_BUSY)return;if(CLOUD_DIRTY||dirtyGet()){cloudPush(false);return;}try{const r=await cloudFetch('/rest/v1/epl_state?id=eq.main&select=version');if(!r.ok)return;const rows=await r.json();const v=rows[0]?rows[0].version:0;if(v>CLOUD_VER){const ae=document.activeElement;const typing=ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');const rn=route().name;if(typing||rn==='session'){cloudSetStatus('다른 기기 변경 v'+v+' · 저장 후 새로고침','b-warn');return;}const cur=await cloudPull();if(cur&&cur.data){const o=migrate(cur.data);if(o){S=o;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}CLOUD_VER=cur.version;cloudSetStatus('동기화됨 · v'+CLOUD_VER+' ('+(cur.updated_by||'')+')','b-good');render();}}}}catch(e){}}
+  catch(e){console.error(e);if(!cloudAuthed())return;cloudSetStatus('⚠ 서버 연결 안 됨 · 이 기기에만 저장 (재시도 중)','b-bad');setTimeout(cloudBoot,20000);}}
+async function cloudPoll(){if(!cloudAuthed()||CLOUD_BUSY||CLOUD_STALE)return;if(CLOUD_DIRTY||dirtyGet()){cloudPush(false);return;}try{const r=await cloudFetch('/rest/v1/epl_state?id=eq.main&select=version');if(!r.ok)return;const rows=await r.json();const v=rows[0]?rows[0].version:0;if(v>CLOUD_VER){const ae=document.activeElement;const typing=ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');const rn=route().name;if(typing||rn==='session'){cloudSetStatus('다른 기기 변경 v'+v+' · 저장 후 새로고침','b-warn');return;}const cur=await cloudPull();if(cloudNewerThanMe(cur))return;if(cur&&cur.data){const o=migrate(cur.data);if(o){S=o;cacheState();CLOUD_VER=cur.version;cloudSetStatus('동기화됨 · v'+CLOUD_VER+' ('+(cur.updated_by||'')+')','b-good');render();}}}}catch(e){}}
 function resetToSeed(){S=rosterSeed();persist();}
 // ===== 3. engines (rule + data only, no AI) =====
 const activeTracks=sid=>S.tracks.filter(t=>t.student_id===sid&&t.active);
@@ -894,8 +948,8 @@ function startMapBook(sid,bookId,date){
 function assessmentsOf(sid,kind){return S.assessments.filter(a=>a.student_id===sid&&(!kind||a.kind===kind)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
 function latestAssessment(sid,kind){const l=assessmentsOf(sid,kind);return l[l.length-1]||null;}
 function refreshAR(s){const a=latestAssessment(s.id,'AR');if(a&&Number.isFinite(Number(a.score)))s.ar_level=Number(a.score);}
-function addAssessment(sid,kind,date,score,level,detail,note){const a={id:uid('as'),student_id:sid,kind:kind||'기타',date:date||todayISO(),score:(score===''||score==null)?null:(Number.isFinite(Number(score))?Number(score):String(score)),level:(level||'').trim(),detail:(detail||'').trim(),note:(note||'').trim()};S.assessments.push(a);const s=studentOf(sid);if(s&&a.kind==='AR')refreshAR(s);persist();return a;}
-function delAssessment(id){const a=byId(S.assessments,id);if(!a)return;S.assessments=S.assessments.filter(x=>x.id!==id);const s=studentOf(a.student_id);if(s&&a.kind==='AR')refreshAR(s);persist();}
+function addAssessment(sid,kind,date,score,level,detail,note){const a={id:uid('as'),student_id:sid,kind:kind||'기타',date:date||todayISO(),score:(score===''||score==null)?null:(Number.isFinite(Number(score))?Number(score):String(score)),level:(level||'').trim(),detail:(detail||'').trim(),note:(note||'').trim()};S.assessments.push(a);const s=studentOf(sid);if(s&&a.kind==='AR')refreshAR(s);try{evaluateStudent(sid,todayISO());}catch(e){console.error(e);}persist();return a;}
+function delAssessment(id){const a=byId(S.assessments,id);if(!a)return;S.assessments=S.assessments.filter(x=>x.id!==id);const s=studentOf(a.student_id);if(s&&a.kind==='AR')refreshAR(s);try{evaluateStudent(a.student_id,todayISO());}catch(e){console.error(e);}persist();}
 function advanceUnit(t,unit,date){
   const b=bookOf(t);t.current_unit_id=unit.id;t.repeat_count=0;
   const nx=nextUnitOf(b,unit.id);
@@ -975,6 +1029,8 @@ function saveSession(d){
     }
     sess.activities.push(act);
   }
+  sess.created_at=new Date().toISOString();
+  if(EDIT_DRAFT&&EDIT_DRAFT.sid===d.student_id&&EDIT_DRAFT.date===d.session_date){sess.redo_of=EDIT_DRAFT.ids.slice();if(EDIT_DRAFT.sent)sess.corrected=true;EDIT_DRAFT=null;}
   S.sessions.push(sess);
   const newAlerts=evaluateStudent(d.student_id,d.session_date);
   sess.homework_notice=genHomeworkNotice(sess,ipDone);
@@ -982,6 +1038,60 @@ function saveSession(d){
   persist();
   return {session:sess,newAlerts};
 }
+
+// --- 세션 되돌리기 · 삭제 · 다시 입력 (잘못 입력한 기록 정정) ---
+// 같은 날짜에 기록이 여러 건이면 마지막 것만 '유효 기록'으로 본다 (포인트 · 알림장 집계)
+function sessionsOnDay(sid,date){return S.sessions.filter(x=>x.student_id===sid&&x.session_date===date);}
+function primaryOfDay(sid,date){const l=sessionsOnDay(sid,date);let p=null;for(const x of l){if(!p){p=x;continue;}const a=x.created_at||'',b=p.created_at||'';if(a>b||(a===b&&S.sessions.indexOf(x)>S.sessions.indexOf(p)))p=x;}return p;}
+const isPrimarySession=x=>primaryOfDay(x.student_id,x.session_date)===x;
+function recalcStreaks(t){
+  const ss=sessionsOf(t.student_id);let hw=0,wr=0,vr=0,hwEnd=false,wrEnd=false,vrEnd=false;
+  for(let i=ss.length-1;i>=0;i--)for(const a of ss[i].activities){if(a.track_id!==t.id)continue;
+    if(a.activity_type==='HOMEWORK_CHECK'&&!hwEnd){if(a.status==='NOT_DONE')hw++;else hwEnd=true;}
+    if(a.activity_type==='INDIVIDUAL_PROGRESS'&&t.category==='WRITING'&&!wrEnd){if(a.status==='NOT_DONE')wr++;else wrEnd=true;}
+    if(a.activity_type==='VOCAB_TEST'&&a.result&&a.result!=='NA'&&!vrEnd){if(a.result==='RETEST')vr++;else vrEnd=true;}}
+  t.hw_miss_streak=hw;t.writing_miss_streak=wr;t.vocab_retest_streak=vr;
+}
+// 세션이 바꾼 진도 상태를 되돌린다. 그 Unit이 아직 '현재 Unit'일 때만 되돌리고, 이후 세션으로 더 나간 교재는 그대로 두고 알려 준다.
+function revertSession(sess){
+  const notes=[];const date=sess.session_date;const R=S.rules;
+  for(let i=sess.activities.length-1;i>=0;i--){const a=sess.activities[i];if(!a.track_id||!a.unit_id)continue;const t=byId(S.tracks,a.track_id);if(!t)continue;const b=bookOf(t);if(!b)continue;
+    const advancing=a.activity_type==='VOCAB_TEST'?(a.result==='PASS'||(a.result==='CHECK'&&R.VOCAB_CHECK_MODE.mode!=='REPEAT')):(a.status==='COMPLETED');
+    if(advancing){
+      if(t.current_unit_id===a.unit_id){
+        const prev=prevUnitOf(b,a.unit_id);t.current_unit_id=prev?prev.id:null;t.next_unit_id=a.unit_id;t.repeat_count=0;
+        if(t.status==='TEST_REQUIRED'||t.status==='PATH_END'){t.status='IN_PROGRESS';S.completion_tests=S.completion_tests.filter(x=>!(x.track_id===t.id&&(x.status==='READY_FOR_TEST'||x.status==='TEST_SCHEDULED')&&x.created_at===date));for(const al of S.alerts)if(al.track_id===t.id&&al.rule_code==='PATH_END'&&al.status!=='RESOLVED'){al.status='RESOLVED';al.resolved_at=todayISO();}}
+        if(!t.active&&t.status==='COMPLETED'&&t.ended_at===date){const nt=S.tracks.find(x=>x.student_id===t.student_id&&x.category===t.category&&x.active&&x.started_at===date&&x.id!==t.id);const used=nt&&S.sessions.some(y=>y.id!==sess.id&&y.activities.some(z=>z.track_id===nt.id));
+          if(nt&&!used){S.tracks=S.tracks.filter(x=>x.id!==nt.id);if(studentOf(t.student_id)&&studentOf(t.student_id).default_track_id===nt.id)studentOf(t.student_id).default_track_id=t.id;t.active=true;t.ended_at=null;t.status='IN_PROGRESS';}
+          else notes.push(b.book_name+': 다음 교재가 이미 시작되어 되돌리지 않음');}
+      }else notes.push(b.book_name+' '+unitShort(b,a.unit_id)+': 이후 진도가 있어 되돌리지 않음 (교재 설정에서 조정)');
+    }else if(t.repeat_count>0)t.repeat_count-=1;
+  }
+  return notes;
+}
+function deleteSession(id,reason){
+  const x=byId(S.sessions,id);if(!x)return null;
+  const notes=revertSession(x);
+  S.sessions=S.sessions.filter(y=>y.id!==id);S.overrides=S.overrides.filter(o=>o.session_id!==id);
+  for(const t of S.tracks.filter(t=>t.student_id===x.student_id))recalcStreaks(t);
+  x.voided_at=new Date().toISOString();x.voided_by=myId(null);x.void_reason=reason||'';S.sessions_void.push(x);if(S.sessions_void.length>500)S.sessions_void.splice(0,S.sessions_void.length-500);
+  try{evaluateStudent(x.student_id,x.session_date);}catch(e){console.error(e);}
+  try{if(window.GA&&GA.onSessionDeleted)GA.onSessionDeleted(x);}catch(e){console.error(e);}
+  persist();return {session:x,notes};
+}
+// '다시 입력': 그 날짜의 기록을 모두 지우고(최근 것부터 되돌림) 세션 입력 화면을 연다. 발송된 알림장이 있었으면 새 알림장에 정정 표시가 붙는다.
+let EDIT_DRAFT=null;
+function redoDay(sid,date){
+  const list=sessionsOnDay(sid,date).slice().sort((a,b)=>(S.sessions.indexOf(b)-S.sessions.indexOf(a)));if(!list.length)return null;
+  const last=primaryOfDay(sid,date)||list[0];const vt={};for(const a of last.activities)if(a.activity_type==='VOCAB_TEST'&&a.score!=null&&a.kind!=='REVIEW')vt[a.track_id]={score:a.score,total:a.total,unit_id:a.unit_id};
+  EDIT_DRAFT={sid,date,ids:list.map(x=>x.id),sent:list.some(x=>x.sent),title:last.original_book_title||'',rec:last.recording_url||'',attitude:last.attitude,note:last.teacher_note||'',teacher_id:last.teacher_id,vt,removed:list.length,notes:[]};
+  for(const x of list){const r=deleteSession(x.id,'다시 입력');if(r)EDIT_DRAFT.notes.push(...r.notes);}
+  return EDIT_DRAFT;
+}
+// 마감 시각: 지점 설정(entry_deadline). 기록이 그 시각 이후에 입력됐으면 '마감 후'
+function deadlineOf(locId){const l=locOf(locId);return (l&&l.entry_deadline)||DEFAULT_ENTRY_DEADLINE;}
+function lateInfo(sess){if(!sess.created_at)return null;const dl=deadlineOf(sess.location_id);const c=new Date(sess.created_at);const limit=new Date(sess.session_date+'T'+dl+':00');if(c<=limit)return null;const hh=String(c.getHours()).padStart(2,'0')+':'+String(c.getMinutes()).padStart(2,'0');return {time:hh,nextDay:isoLocal(c)!==sess.session_date};}
+function deadlineBadge(date,locId){const locs=locId?[locOf(locId)].filter(Boolean):S.locations;const dls=[...new Set(locs.map(l=>(l&&l.entry_deadline)||DEFAULT_ENTRY_DEADLINE))].sort();const dl=dls[0]||DEFAULT_ENTRY_DEADLINE;const label=dls.length>1?'입력 마감 '+locs.map(l=>l.name+' '+(l.entry_deadline||DEFAULT_ENTRY_DEADLINE)).join(' · '):'입력 마감 '+dl;if(date!==todayISO())return badge('b-muted',label);const now=new Date();const limit=new Date(date+'T'+dl+':00');const diff=Math.round((limit-now)/60000);if(diff<0)return badge('b-warn',label+' · 지남 — 지금 입력은 "마감 후"로 표시');return badge(diff<=30?'b-warn':'b-muted',label+' · '+(diff>=60?Math.floor(diff/60)+'시간 '+(diff%60)+'분':diff+'분')+' 남음');}
 
 // --- completion tests ---
 function scheduleTest(id,date){const ct=byId(S.completion_tests,id);if(!ct)return;ct.scheduled_date=date;ct.status='TEST_SCHEDULED';persist();}
@@ -1005,7 +1115,7 @@ function prepareRetest(id,date){
 }
 
 // --- exception engine ---
-const COMPUTED_RULES=['HW_MISS','UNIT_REPEAT','VOCAB_RETEST','QUIZ_LOW','STAGNATION','WRITING_MISS','DECLINE','OVERRIDE_REPEAT'];
+const COMPUTED_RULES=['HW_MISS','HW_MISS_DIRECTOR','UNIT_REPEAT','VOCAB_RETEST','QUIZ_LOW','STAGNATION','WRITING_MISS','DECLINE','OVERRIDE_REPEAT','TEST_DUE_RTP','TEST_DUE_NELT'];
 const rubricAvg=r=>{if(!r)return null;const v=[r.acc,r.idea,r.expr].filter(x=>x!=null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length*10)/10:null;};
 function evaluateStudent(sid,date){
   const R=S.rules;const active=[];const created=[];const today=date||todayISO();
@@ -1021,6 +1131,11 @@ function evaluateStudent(sid,date){
     const used=trackSessions(t);
     if(expected>0&&used>expected)add('STAGNATION',t.id,'WARN',b.book_name+' · 세션 '+used+'회 (기준 '+expected+'회 초과)','진도 점검');
   }
+  // 숙제 미제출 누적 → 원장 보고 (기간 내 횟수)
+  {const RD=R.HW_MISS_DIRECTOR||{count:3,days:30};const since=addDays(today,-num(RD.days,30));const miss=hwMissList(sid,since,today);
+    if(miss.length>=num(RD.count,3))add('HW_MISS_DIRECTOR',null,'ACTION','최근 '+num(RD.days,30)+'일 숙제 미제출 '+miss.length+'회 ('+miss.slice(-3).map(m=>m.date.slice(5)).join(', ')+')','담임 통화 후 원장 보고');}
+  // RTP · NELT 재검사 시기 (마지막 테스트일 기준)
+  for(const [kind,key] of [['RTP','rtp_months'],['NELT','nelt_months']]){const due=testDueInfo(sid,kind,today);if(due&&due.due)add('TEST_DUE_'+kind,null,'WARN',kind+' 마지막 테스트 '+(due.last?due.last+' ('+due.monthsAgo+'개월 전)':'기록 없음')+' → 재검사 시기','2주 안에 '+kind+' 실시 → 평가 기록 입력');}
   const w=num(R.DECLINE.window,5);
   if(sess.length>=2*w){
     const rec=sess.slice(-w).map(sessionPct).filter(x=>x!=null),prev=sess.slice(-2*w,-w).map(sessionPct).filter(x=>x!=null);
@@ -1036,6 +1151,17 @@ function evaluateStudent(sid,date){
   return created;
 }
 function runAllRules(date){let n=0;for(const st of S.students){if(st.status!=='ACTIVE')continue;n+=evaluateStudent(st.id,date).length;}persist();return n;}
+// 숙제 미제출 목록 (기간 내 · 유효 기록만) — 원장 리스트와 알림에 같이 쓴다
+function hwMissList(sid,from,to){const out=[];for(const x of sessionsOf(sid)){if(x.session_date<from||x.session_date>to||!isPrimarySession(x))continue;for(const a of x.activities)if(a.activity_type==='HOMEWORK_CHECK'&&a.status==='NOT_DONE'){const b=byId(S.books,a.book_id);out.push({date:x.session_date,book:a.custom_name||(b?(b.category==='VOCAB'?'온라인 학습':b.book_name):''),session_id:x.id});}}return out;}
+function hwMissReport(days,loc){const R=S.rules.HW_MISS_DIRECTOR||{count:3,days:30};days=days||num(R.days,30);const today=todayISO();const since=addDays(today,-days);const rows=[];for(const s of S.students){if(s.status!=='ACTIVE'||(loc&&s.location_id!==loc))continue;const miss=hwMissList(s.id,since,today);if(miss.length>=num(R.count,3))rows.push({s,miss,alert:S.alerts.find(a=>a.student_id===s.id&&a.rule_code==='HW_MISS_DIRECTOR'&&a.status!=='RESOLVED')||null});}return rows.sort((a,b)=>b.miss.length-a.miss.length||a.s.name.localeCompare(b.s.name,'ko'));}
+// 테스트 재검사 시기: RTP는 AR 기록도 같은 레벨테스트로 본다. 기록이 없으면 등원 후 주기가 지났을 때부터.
+function monthsBetween(a,b){const d1=new Date(a+'T00:00:00'),d2=new Date(b+'T00:00:00');return (d2.getFullYear()-d1.getFullYear())*12+(d2.getMonth()-d1.getMonth())-(d2.getDate()<d1.getDate()?1:0);}
+function testDueInfo(sid,kind,today){const R=S.rules.TEST_DUE||{rtp_months:3,nelt_months:3};const months=num(kind==='RTP'?R.rtp_months:R.nelt_months,3);if(months<=0)return null;today=today||todayISO();
+  const list=assessmentsOf(sid).filter(a=>a.kind===kind||(kind==='RTP'&&a.kind==='AR'));const last=list.length?list[list.length-1].date:null;const s=studentOf(sid);
+  const base=last||(s&&s.enrolled_at)||null;if(!base)return {kind,last:null,monthsAgo:null,due:false};const m=monthsBetween(base,today);return {kind,last,monthsAgo:m,due:m>=months,months};}
+function testDueReport(loc){const out=[];for(const s of S.students){if(s.status!=='ACTIVE'||(loc&&s.location_id!==loc))continue;for(const kind of ['RTP','NELT']){const d=testDueInfo(s.id,kind);if(d&&d.due)out.push({s,kind,last:d.last,monthsAgo:d.monthsAgo});}}return out.sort((a,b)=>(b.monthsAgo||0)-(a.monthsAgo||0)||a.s.name.localeCompare(b.s.name,'ko'));}
+// 하루 한 번(기기별) 시간 기준 규칙을 돌린다 — 세션이 없어도 테스트 시기 알림이 뜨도록
+function dailyRuleCheck(){try{const today=todayISO();const key='epl_rules_checked';let done=null;try{done=localStorage.getItem(key);}catch(e){}if(done===today)return 0;let n=0;for(const st of S.students){if(st.status!=='ACTIVE')continue;n+=evaluateStudent(st.id,today).length;}try{localStorage.setItem(key,today);}catch(e){}if(n)persist();return n;}catch(e){console.error(e);return 0;}}
 
 // --- curriculum admin ---
 function regenUnits(b,n){
@@ -1079,13 +1205,14 @@ function commentVars(sess){
   const vt=sess.activities.find(a=>a.activity_type==='VOCAB_TEST'&&a.pct!=null);const vb=vt?byId(S.books,vt.book_id):null;
   const nextDay=(()=>{if(!s.schedules||!s.schedules.length)return '';for(let i=1;i<=7;i++){const d=addDays(sess.session_date,i);if(s.schedules.some(x=>x.weekday===wdOf(d)))return fmtDateK(d);}return '';})();
   const wr=sess.activities.filter(a=>a.activity_type==='INDIVIDUAL_PROGRESS'&&a.rubric).map(a=>{const b=byId(S.books,a.book_id);return (b?b.book_name+' ':'')+unitLong(b,a.unit_id)+' · '+RUBRIC.map(([k,l])=>a.rubric[k]!=null?l+' '+a.rubric[k]:'').filter(Boolean).join(' · ')+(a.work?' · 「'+a.work+'」':'');}).join(' / ');
+  const hw=sess.activities.filter(a=>a.activity_type==='HOMEWORK_CHECK').map(a=>{const b=byId(S.books,a.book_id);const name=a.custom_name?a.custom_name:b?(b.category==='VOCAB'?'온라인 단어 학습':b.book_name+(a.unit_id?' '+unitLong(b,a.unit_id):'')):'';return name?name+' '+(HW_PARENT_ST[a.status]||''):'';}).filter(Boolean).join(' · ');
   return {학원:S.meta.academy_name||'EPL 영어학원',학생:s.name,날짜:fmtDateK(sess.session_date),강사:nameOf(S.teachers,sess.teacher_id),
-    원서:sess.original_book_title||'',퀴즈:'',라이팅:wr,
+    원서:sess.original_book_title||'',퀴즈:'',라이팅:wr,숙제제출:hw,
     교재진도:ip.join(' / '),단어:vt?(vb?vb.book_name+' ':'')+(vt.kind==='REVIEW'?'리뷰 테스트 '+(vt.range||''):unitLong(vb,vt.unit_id))+' '+vt.score+'/'+vt.total+' ('+vt.pct+'%) '+(RESULT_K[vt.result]||''):'',
     태도:sess.attitude?'★'.repeat(sess.attitude)+'☆'.repeat(Math.max(0,5-sess.attitude)):'',
     숙제:sess.homework_notice?'[숙제 안내]\n'+sess.homework_notice:'',녹음:sess.recording_url?'북토킹 녹음: '+sess.recording_url:'',다음등원:nextDay};
 }
-function genComment(sess){return stripRoutine(fillTemplate(S.meta.comment_template||DEFAULT_COMMENT_TEMPLATE,commentVars(sess)));}
+function genComment(sess){const t=stripRoutine(fillTemplate(S.meta.comment_template||DEFAULT_COMMENT_TEMPLATE,commentVars(sess)));return sess.corrected?'※ 앞서 보내드린 알림장을 정정하여 다시 보내드립니다.\n\n'+t:t;}
 
 // --- student chart (학생 차트 = 진료기록) ---
 const ymOf=iso=>iso?iso.slice(0,7):'';
@@ -1250,7 +1377,7 @@ function sessionPoints(x){
 function pointsText(d){return Object.keys(POINT_L).filter(k=>d[k]).map(k=>POINT_L[k]+' '+d[k]).join(' · ');}
 function pointsOf(sid,ym){
   const d={unit:0,hw:0,online:0,vocab:0,test:0,attitude:0,book:0,writing:0};
-  for(const x of sessionsOf(sid)){if(ymOf(x.session_date)!==ym)continue;const e=sessionPoints(x);for(const k of Object.keys(d))d[k]+=e[k];}
+  for(const x of sessionsOf(sid)){if(ymOf(x.session_date)!==ym)continue;if(!isPrimarySession(x))continue;const e=sessionPoints(x);for(const k of Object.keys(d))d[k]+=e[k];}
   d.total=Object.values(d).reduce((a,b)=>a+b,0);return d;
 }
 function rankingOf(ym,loc){const rows=S.students.filter(s=>s.status==='ACTIVE'&&(!loc||s.location_id===loc)).map(s=>({s,tier:tierOf(s),p:pointsOf(s.id,ym),prev:pointsOf(s.id,ymOf(addDays(ym+'-01',-1))).total})).sort((a,b)=>b.p.total-a.p.total||a.s.name.localeCompare(b.s.name,'ko'));let r=0,last=null;rows.forEach((x,i)=>{if(x.p.total!==last){r=i+1;last=x.p.total;}x.rank=r;});return rows;}
@@ -1304,7 +1431,7 @@ function slotData(sid){
 }
 function slotHtml(label,tracks,defId){
   if(!tracks.length)return '<div class="slot"><div class="k">'+label+'</div><div class="u small">—</div></div>';
-  return '<div class="slot"><div class="k">'+label+'</div>'+tracks.map(t=>{const b=bookOf(t);if(label==='숙제 검사'&&t.category==='VOCAB')return '<div class="u small">온라인 학습</div>';const u=t.next_unit_id?unitShort(b,t.next_unit_id):null;return '<div class="'+(u?'u':'u small')+'">'+h(u||TRACK_ST[t.status]||t.status)+(defId&&t.id===defId?' <small style="font-size:12px;font-family:inherit;font-weight:500">★</small>':'')+'</div><div class="bk" title="'+h(b.book_name)+'">'+h(b.book_name)+'</div>';}).join('')+'</div>';
+  return '<div class="slot"><div class="k">'+label+'</div>'+tracks.map(t=>{const b=bookOf(t);if(label==='숙제 검사'&&t.category==='VOCAB')return '<div class="u small">온라인 학습</div>';const u=t.next_unit_id?unitShort(b,t.next_unit_id):null;return '<div class="'+(u?'u':'u small')+'">'+h(u||TRACK_ST[t.status]||t.status)+(defId&&t.id===defId?' <small style="font-size:12px;font-family:inherit;font-weight:500">★</small>':'')+'</div><div class="bk" title="'+h(b.book_name)+'">'+h(b.book_name)+'</div>'+(t.progress_note?'<div class="note" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="진도 시트에 적힌 진도">시트 '+h(t.progress_note)+'</div>':'');}).join('')+'</div>';
 }
 function trackBadge(t){return badge(t.status==='IN_PROGRESS'?'b-muted':(t.status==='PATH_END'?'b-bad':'b-brass'),TRACK_ST[t.status]||t.status);}
 const notFound=(w)=>'<div class="empty">'+h(w)+'을(를) 찾을 수 없습니다.</div>';
@@ -1340,7 +1467,7 @@ function viewHome(q){
   '<div class="bar"><label class="f">날짜<input type="date" class="hq" data-k="date" value="'+date+'"></label>'+
   '<label class="f">지점<select class="hq" data-k="loc"><option value="">전체</option>'+opt(S.locations,loc)+'</select></label>'+
   '<label class="f">담임<select class="hq" data-k="tch"><option value="">전체</option>'+opt(S.teachers.filter(t=>t.role==='TEACHER'),tch)+'</select></label>'+
-  '<div class="sp"></div><div class="flags">'+badge('b-muted',date+' ('+WD[wd]+') · '+rows.length+'명')+(done?badge('b-good','입력 완료 '+done):'')+(nAlert?'<a href="#/alerts" style="text-decoration:none">'+badge('b-bad','처리할 예외 '+nAlert)+'</a>':'')+(incPrev?'<a href="#/alerts?f=INCOMPLETE" style="text-decoration:none">'+badge('b-warn','어제까지 미완료 '+incPrev)+'</a>':'')+(nTest?badge('b-brass','TEST 대기 '+nTest):'')+'</div>'+
+  '<div class="sp"></div><div class="flags">'+badge('b-muted',date+' ('+WD[wd]+') · '+rows.length+'명')+deadlineBadge(date,loc||null)+(done?badge('b-good','입력 완료 '+done):'')+(nAlert?'<a href="#/alerts" style="text-decoration:none">'+badge('b-bad','처리할 예외 '+nAlert)+'</a>':'')+(incPrev?'<a href="#/alerts?f=INCOMPLETE" style="text-decoration:none">'+badge('b-warn','어제까지 미완료 '+incPrev)+'</a>':'')+(nTest?badge('b-brass','TEST 대기 '+nTest):'')+'</div>'+
   '<a class="btn" href="#/notices?date='+date+(loc?'&loc='+loc:'')+'">알림장 보드</a></div>'+
   (auto?'<p class="note">오늘은 등원 예정 학생이 없어 다음 등원일('+date+')을 보여줍니다.</p>':'')+
   '<p class="note">숙제·교재·라이팅은 전부 "완료"로 저장됩니다. 다른 경우만 "자세히"를 누르세요.</p>'+
@@ -1352,7 +1479,7 @@ function studentCard(s,sch,date){
   const comp=completionOf(s,date);const todo=al.filter(a=>a.status==='OPEN'||a.status==='ACKNOWLEDGED');
   const compBadge=comp==='DONE'?badge('b-good','완료 (기록 + 알림장)'):comp==='NOT_SENT'?badge('b-warn','기록됨 · 알림장 미발송'):comp==='ABSENT'?badge('b-muted','결석'):(date<todayISO()?badge('b-bad','세션 미기록'):'');
   return '<div class="st"><div class="time">'+h(sch.time)+'<small>'+h(nameOf(S.locations,s.location_id))+'</small></div><div>'+
-  '<div class="who"><a class="nm" href="#/student/'+s.id+'">'+h(s.name)+'</a><span class="ar">AR '+h(s.ar_level)+'</span>'+(sch.ip_time?'<span class="note">개별진도 '+h(sch.ip_time)+(sch.teacher_id?' · '+h(nameOf(S.teachers,sch.teacher_id)):'')+'</span>':'<a class="note" href="#/timetable?loc='+s.location_id+'&wd='+wdOf(date)+'&pick='+s.id+'" style="color:var(--warn)">슬롯 미배정</a>')+'<a class="note" href="#/map/'+s.id+'">맵</a><a class="note" href="#/chart/'+s.id+'">차트</a>'+compBadge+
+  '<div class="who"><a class="nm" href="#/student/'+s.id+'">'+h(s.name)+'</a><span class="ar">AR '+h(s.ar_level)+'</span>'+(sch.ip_time?'<span class="note">개별진도 '+h(sch.ip_time)+(sch.teacher_id?' · '+h(nameOf(S.teachers,sch.teacher_id)):'')+'</span>':'<a class="note" href="#/timetable?loc='+s.location_id+'&wd='+wdOf(date)+'&pick='+s.id+'" style="color:var(--warn)">슬롯 미배정</a>')+'<a class="note" href="#/map/'+s.id+'">맵</a><a class="note" href="#/chart/'+s.id+'">차트</a><a class="note" href="#/archive/'+s.id+'">아카이브</a>'+compBadge+
   (comp==='NO_SESSION'?'<button class="btn s" data-act="absent" data-id="'+s.id+'" data-date="'+date+'">결석</button>':'')+
   todo.map(a=>'<a href="#/alerts" style="text-decoration:none">'+badge(SEV_CLS[a.severity]||'b-info','⚠ '+(RULE_L[a.rule_code]||EVENT_TYPES[a.rule_code]||a.rule_code)+' · '+LEVEL_L[a.authority_level||'TEACHER']+(a.due_at?' · ~'+a.due_at:''))+'</a>').join('')+
   tests.map(t=>{const ct=latestTestOf(t);return badge('b-brass','TEST · '+bookOf(t).book_name+' · '+(ct?(TEST_ST[ct.status]||ct.status):(TRACK_ST[t.status]||t.status))+(ct&&ct.scheduled_date?' '+ct.scheduled_date:''));}).join('')+
@@ -1362,7 +1489,7 @@ function studentCard(s,sch,date){
 }
 function quickRow(s,sd,date,comp){
   if(date>todayISO())return '';
-  if(comp==='DONE'||comp==='NOT_SENT'){const x=S.sessions.filter(y=>y.student_id===s.id&&y.session_date===date).pop();return '<div class="row qk" style="margin-top:8px"><span class="note">'+(comp==='DONE'?'오늘 끝':'알림장만 남음')+'</span>'+(x?'<button class="btn s p" data-act="shareComment" data-id="'+x.id+'">알림장 공유</button><button class="btn s" data-act="copyComment" data-id="'+x.id+'">복사</button><a class="btn s" href="#/notices?date='+date+'&focus='+x.id+'">알림장 수정</a><label class="note"><input type="checkbox" data-act="toggleSent" data-id="'+x.id+'"'+(x.sent?' checked':'')+'> 보냄</label>':'')+'<a class="note" href="#/student/'+s.id+'">기록 보기</a></div>';}
+  if(comp==='DONE'||comp==='NOT_SENT'){const x=S.sessions.filter(y=>y.student_id===s.id&&y.session_date===date).pop();return '<div class="row qk" style="margin-top:8px"><span class="note">'+(comp==='DONE'?'오늘 끝':'알림장만 남음')+'</span>'+(x?'<button class="btn s p" data-act="shareComment" data-id="'+x.id+'">알림장 공유</button><button class="btn s" data-act="copyComment" data-id="'+x.id+'">복사</button><a class="btn s" href="#/notices?date='+date+'&focus='+x.id+'">알림장 수정</a><label class="note"><input type="checkbox" data-act="toggleSent" data-id="'+x.id+'"'+(x.sent?' checked':'')+'> 보냄</label><button class="link note" data-act="redoSession" data-sid="'+s.id+'" data-date="'+date+'" title="오늘 기록을 지우고 다시 입력 (진도 되돌림)">기록 수정</button>':'')+'<a class="note" href="#/student/'+s.id+'">기록 보기</a></div>';}
   if(comp==='ABSENT')return '';
   if(!activeTracks(s.id).length)return '<div class="row qk" style="margin-top:8px"><a class="btn s" href="#/student/'+s.id+'?edit=tracks">교재 먼저 설정</a></div>';
   const vt=sd.vt.find(t=>t.next_unit_id);
@@ -1425,7 +1552,7 @@ function sessRow(x){
   const on=x.activities.filter(a=>a.activity_type==='HOMEWORK_CHECK'&&(byId(S.books,a.book_id)||{}).category==='VOCAB').map(a=>MARK[a.status]).join(' ');
   const ip=x.activities.filter(a=>a.activity_type==='INDIVIDUAL_PROGRESS').map(a=>{const b=byId(S.books,a.book_id);return '<div>'+h(b?b.book_name:'')+' <b>'+(a.status==='REVIEW'?h(a.lesson_note||'복습·오답'):h(unitShort(b,a.unit_id))+' '+MARK[a.status]+(a.lesson_note?' '+h(a.lesson_note):''))+'</b>'+(a.rubric?' <span class="note">'+RUBRIC.map(([k,l])=>a.rubric[k]!=null?l[0]+a.rubric[k]:'').filter(Boolean).join('·')+'</span>':'')+(a.work?'<div class="note">「'+h(a.work)+'」</div>':'')+(a.photo_id?photoTag(a.photo_id):'')+'</div>';}).join('');
   const vt=x.activities.find(a=>a.activity_type==='VOCAB_TEST');const vb=vt?byId(S.books,vt.book_id):null;
-  return '<tr><td>'+monthSeq(x)+'</td><td style="white-space:nowrap">'+h(x.session_date)+'</td><td>'+h(x.original_book_title||nameOf(S.original_books,x.original_book_id)||'—')+'</td><td>'+h(hw)+'</td><td>'+h(on)+'</td><td>'+(ip||'<span class="note">—</span>')+'</td><td>'+(vt?(vt.kind==='REVIEW'?'<span class="badge b-brass">리뷰 '+h(vt.range||'')+'</span>':h(unitShort(vb,vt.unit_id)))+(vt.pct!=null?'<div class="note">'+vt.score+'/'+vt.total+' · '+vt.pct+'% '+h(vt.result)+'</div>':''):'')+'</td><td style="white-space:nowrap;color:var(--brass-ink)">'+stars(x.attitude)+'</td><td class="note" style="max-width:220px;white-space:pre-line">'+h(x.homework_notice)+'</td><td style="white-space:nowrap">'+(x.daily_comment?'<button class="btn s" data-act="copyComment" data-id="'+x.id+'">복사</button> <a class="btn s" href="#/notices?date='+h(x.session_date)+'&focus='+x.id+'">수정</a>'+(x.sent?' <span class="badge b-good">보냄</span>':''):'')+'</td><td>'+h(nameOf(S.teachers,x.teacher_id))+'</td></tr>';
+  return '<tr><td>'+monthSeq(x)+'</td><td style="white-space:nowrap">'+h(x.session_date)+'</td><td>'+h(x.original_book_title||nameOf(S.original_books,x.original_book_id)||'—')+'</td><td>'+h(hw)+'</td><td>'+h(on)+'</td><td>'+(ip||'<span class="note">—</span>')+'</td><td>'+(vt?(vt.kind==='REVIEW'?'<span class="badge b-brass">리뷰 '+h(vt.range||'')+'</span>':h(unitShort(vb,vt.unit_id)))+(vt.pct!=null?'<div class="note">'+vt.score+'/'+vt.total+' · '+vt.pct+'% '+h(vt.result)+'</div>':''):'')+'</td><td style="white-space:nowrap;color:var(--brass-ink)">'+stars(x.attitude)+'</td><td class="note" style="max-width:220px;white-space:pre-line">'+h(x.homework_notice)+'</td><td style="white-space:nowrap">'+(x.daily_comment?'<button class="btn s" data-act="copyComment" data-id="'+x.id+'">복사</button> <a class="btn s" href="#/notices?date='+h(x.session_date)+'&focus='+x.id+'">알림장</a>'+(x.sent?' <span class="badge b-good">보냄</span>':'')+(x.corrected?' <span class="badge b-warn">정정</span>':''):'')+(isPrimarySession(x)?'':' <span class="badge b-muted" title="같은 날 더 최근 기록이 있어 포인트에서 제외">중복</span>')+(lateInfo(x)?' <span class="badge b-muted" title="입력 마감 이후에 기록됨">마감 후 '+h(lateInfo(x).time)+'</span>':'')+'<div style="margin-top:4px"><button class="btn s" data-act="redoSession" data-sid="'+x.student_id+'" data-date="'+h(x.session_date)+'" title="이 날짜 기록을 지우고 다시 입력 (진도 되돌림)">기록 수정</button> <button class="btn s d" data-act="delSession" data-id="'+x.id+'">삭제</button></div></td><td>'+h(nameOf(S.teachers,x.teacher_id))+'</td></tr>';
 }
 function viewStudent(id,q){
   const s=studentOf(id);if(!s)return notFound('학생');
@@ -1439,7 +1566,7 @@ function viewStudent(id,q){
     '<div class="hist">'+us.map((u,i)=>{const n=unitAttempts(histTrack,u.id);const cls=i<=doneIdx?'done':(u.id===histTrack.next_unit_id?'cur':'');return '<span class="'+cls+'" title="세션 '+n+'회">'+h(unitShort(b,u.id))+(n?' <small>×'+n+'</small>':'')+'</span>';}).join('')+'</div>'+
     '<p class="note" style="margin-top:8px">완료(초록) · 다음 Unit(금색) · ×n = 그 Unit에 쓴 세션 수. Override '+S.overrides.filter(o=>o.track_id===histTrack.id).length+'회 · Completion Test '+S.completion_tests.filter(x=>x.track_id===histTrack.id).length+'회</p>';}
   return '<div class="bar"><div><h1>'+h(s.name)+(s.grade?' <span class="note" style="font-size:14px;font-weight:400">'+h(s.grade)+'</span>':'')+'</h1><p class="sub" style="margin:0">AR '+h(s.ar_level)+' · 담임 '+h(nameOf(S.teachers,s.homeroom_teacher_id))+' · '+h(nameOf(S.locations,s.location_id))+' · '+(s.schedules.length?s.schedules.map(x=>WD[x.weekday]).join('·')+' '+h(s.schedules[0].time):'등원 요일 미설정')+(s.status!=='ACTIVE'?' · '+badge('b-muted',{PAUSED:'휴원',WITHDRAWN:'퇴원'}[s.status]||s.status):'')+'</p></div><span class="sp"></span>'+
-  '<a class="btn p" href="#/session/'+s.id+'">세션 입력</a><a class="btn b" href="#/map/'+s.id+'">성장 맵</a><a class="btn" href="#/chart/'+s.id+'">학생 차트</a><a class="btn" href="#/student/'+s.id+'?edit=tracks">교재 설정</a><a class="btn" href="#/student/'+s.id+'?edit=info">학생 정보</a></div>'+
+  '<a class="btn p" href="#/session/'+s.id+'">세션 입력</a><a class="btn b" href="#/map/'+s.id+'">성장 맵</a><a class="btn" href="#/chart/'+s.id+'">학생 차트</a><a class="btn" href="#/archive/'+s.id+'">아카이브</a><a class="btn" href="#/student/'+s.id+'?edit=tracks">교재 설정</a><a class="btn" href="#/student/'+s.id+'?edit=info">학생 정보</a></div>'+
   (q.edit==='tracks'?trackForm(s):'')+
   (q.edit==='info'?'<div class="panel"><h2>학생 정보</h2>'+studentForm(s)+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveStudent" data-id="'+s.id+'">저장</button><a class="btn" href="#/student/'+s.id+'">닫기</a></div></div>':'')+
   '<div class="panel"><h2>CURRENT STATE</h2><div class="tw"><table class="t"><thead><tr><th>교재</th><th>현재</th><th>다음</th><th>방식</th><th>상태</th></tr></thead><tbody>'+
@@ -1465,7 +1592,8 @@ function hwRow(i,t,cands,custom){const n='st_hw_'+i;const isC=!t;const vocab=t&&
 function ipBody(i,t){
   const b=bookOf(t);const nx=t.next_unit_id;const n='st_ip_'+i;
   if(!nx)return '<div class="line"><span class="lbl">'+h(TRACK_ST[t.status]||t.status)+' <span class="note">(교재 끝 · 복습만 기록)</span></span><input type="hidden" name="'+n+'" value="REVIEW"><input type="text" class="ln" id="ln_'+i+'" placeholder="메모 (예: 오답노트 p.12)"></div>';
-  return '<div class="line"><span class="lbl">오늘 <b style="color:var(--brass-ink)">'+h(unitLong(b,nx))+'</b></span><div class="chips">'+chip(n,'COMPLETED','완료',true)+chip(n,'PARTIAL','다 못함',false)+chip(n,'REPEAT','한 번 더',false)+chip(n,'REVIEW','복습·오답',false)+'<label class="chip-opt"><input type="radio" class="ipst" data-i="'+i+'" name="'+n+'" value="OTHER"><span>다른 Unit…</span></label></div><span id="ov_'+i+'" hidden><select id="ipUnit_'+i+'">'+opt(unitsOf(b).filter(u=>u.id!==nx),'',u=>u.unit_name)+'</select> <input type="text" id="ipReason_'+i+'" placeholder="이유 (필수)" style="min-width:120px"></span><input type="text" class="ln" id="ln_'+i+'" placeholder="메모" style="min-width:90px;width:140px"></div>'+rubricRow(i,t);
+  // 오늘 진행한 Unit을 바로 고른다 (기본값 = 시스템이 계산한 다음 Unit). 바꾸면 그 Unit이 오늘 기록이 되고 다음 Unit은 그 뒤로 이어진다.
+  return '<div class="line"><span class="lbl">오늘 <select id="ipUnit_'+i+'" class="ipUnitSel" data-i="'+i+'" data-nx="'+h(nx)+'" title="오늘 진행한 Unit — 시트·실제 진도와 다르면 여기서 바로 고르세요">'+opt(unitsOf(b),nx,u=>u.unit_name)+'</select>'+(b.units_placeholder||!b.grid||!b.grid.length?'<button class="link note" data-act="ipUnitAdd" data-i="'+i+'" data-book="'+h(b.id)+'" title="이 교재에 Unit 하나 추가" style="text-decoration:none;margin-left:4px">+Unit</button>':'')+(t.progress_note?'<span class="note" title="진도 시트에 적힌 진도" style="margin-left:6px">시트: '+h(t.progress_note)+'</span>':'')+'</span><div class="chips">'+chip(n,'COMPLETED','완료',true)+chip(n,'PARTIAL','다 못함',false)+chip(n,'REPEAT','한 번 더',false)+chip(n,'REVIEW','복습·오답',false)+'</div><input type="text" id="ipReason_'+i+'" placeholder="다른 Unit인 이유 (선택)" style="min-width:120px" hidden><input type="text" class="ln" id="ln_'+i+'" placeholder="메모" style="min-width:90px;width:140px"></div>'+rubricRow(i,t);
 }
 function rubricRow(i,t){
   if(!t||t.category!=='WRITING')return '';
@@ -1494,9 +1622,12 @@ function viewSession(id,q){
       rows.push(seRow(n,'오늘 교재',cands.length?'<div id="ipRows" data-sid="'+s.id+'" data-n="'+init.length+'">'+init.map((t,i)=>ipRowHtml(i,t,cands,sd.def?sd.def.id:null)).join('')+'</div><div class="line"><button class="btn s" data-act="ipAdd">+ 교재 하나 더</button><button class="btn s" data-act="toggleQb">+ 새 교재 만들기</button></div><div id="qbHost" hidden>'+quickBookForm(s.id,'session')+'</div>':'<span class="note">학원에서 진행하는 교재가 없습니다 (모든 교재가 숙제 방식). </span><button class="btn s" data-act="toggleQb">+ 새 교재 만들기</button><div id="ipRows" data-sid="'+s.id+'" data-n="0"></div><div id="qbHost" hidden>'+quickBookForm(s.id,'session')+'</div>'));}
     else if(k==='VT'){for(const t of sd.vt){const b=bookOf(t);n++;const rd=reviewDue(t);rows.push(seRow(n,'단어 · '+h(b.book_name),t.next_unit_id?'<div class="line"><select id="vtU_'+t.id+'" class="vtU" data-t="'+t.id+'" title="시험 본 Unit">'+opt(unitsOf(b),rd?'':t.next_unit_id,u=>u.unit_name)+'<option value="__review"'+(rd?' selected':'')+'>리뷰 테스트…</option></select><input type="text" id="vtR_'+t.id+'" placeholder="범위 (예: Unit 1-5)" value="'+h(rd||'')+'" style="width:130px"'+(rd?'':' hidden')+'><span><input type="number" class="vt" data-t="'+t.id+'" id="vt_'+t.id+'" min="0" placeholder="점수"> / <input type="number" class="vt" data-t="'+t.id+'" id="vtT_'+t.id+'" min="1" value="12"></span><span id="vtj_'+t.id+'" class="note">'+(rd?'리뷰 테스트 차례입니다 ('+h(rd)+')':'안 봤으면 비워두기')+'</span></div>':'<span class="note">'+h(TRACK_ST[t.status]||t.status)+'</span>'));}}
   }
-  return '<div class="bar"><div><h1>세션 입력 · '+h(s.name)+'</h1><p class="sub" style="margin:0">AR '+h(s.ar_level)+' · '+h(loc?loc.name:'')+' · 순서는 지점 Flow를 따릅니다'+(already?' · '+badge('b-warn','이 날짜에 이미 '+already+'회 입력됨'):'')+'</p></div><span class="sp"></span>'+
-  '<label class="f">날짜<input type="date" id="seDate" value="'+date+'"></label><label class="f">강사<select id="seTeacher">'+opt(S.teachers,myId(s.homeroom_teacher_id))+'</select></label></div>'+
-  '<div class="panel">'+rows.join('')+seRow(n+1,'수업태도','<div class="line"><div class="chips">'+[5,4,3,2,1].map(v=>'<label class="chip-opt"><input type="radio" name="seAttitude" value="'+v+'"'+(v===5?' checked':'')+'><span>'+'★'.repeat(v)+'☆'.repeat(5-v)+'</span></label>').join('')+'</div></div>')+'<div class="srow"><div class="n"></div><div><input type="text" id="seNote" placeholder="메모 (내부용, 선택)" style="width:100%"></div></div>'+
+  const D=(EDIT_DRAFT&&EDIT_DRAFT.sid===id&&EDIT_DRAFT.date===date)?EDIT_DRAFT:null;
+  if(D)setTimeout(()=>{const t=$('#seBookTitle');if(t&&D.title)t.value=D.title;const r=$('#seRec');if(r&&D.rec)r.value=D.rec;const nt=$('#seNote');if(nt&&D.note)nt.value=D.note;for(const [tid,v] of Object.entries(D.vt||{})){const sc=$('#vt_'+tid),tt=$('#vtT_'+tid);if(sc&&v.score!=null)sc.value=v.score;if(tt&&v.total)tt.value=v.total;}},30);
+  return '<div class="bar"><div><h1>세션 입력 · '+h(s.name)+'</h1><p class="sub" style="margin:0">AR '+h(s.ar_level)+' · '+h(loc?loc.name:'')+' · 순서는 지점 Flow를 따릅니다'+(already&&!D?' · '+badge('b-warn','이 날짜에 이미 '+already+'회 입력됨 — 고치려면 학생 페이지의 "기록 수정"을 쓰세요'):'')+'</p></div><span class="sp"></span>'+
+  '<label class="f">날짜<input type="date" id="seDate" value="'+date+'"></label><label class="f">강사<select id="seTeacher">'+opt(S.teachers,(D&&D.teacher_id)||myId(s.homeroom_teacher_id))+'</select></label></div>'+
+  (D?'<div class="ban">다시 입력 중 — '+h(fmtDateK(date))+' 기록 '+D.removed+'건을 지우고 진도를 기록 전으로 되돌렸습니다. 원서·태도·메모·단어 점수는 그대로 채워 두었으니 틀린 곳만 고쳐 저장하세요.'+(D.sent?' <b>이미 발송된 알림장이 있어 새 알림장에 "정정" 표시가 붙습니다 — 다시 보내 주세요.</b>':'')+(D.notes.length?'<div style="margin-top:4px">되돌리지 못한 항목: '+h(D.notes.join(' / '))+'</div>':'')+'</div>':'')+
+  '<div class="panel">'+rows.join('')+seRow(n+1,'수업태도','<div class="line"><div class="chips">'+[5,4,3,2,1].map(v=>'<label class="chip-opt"><input type="radio" name="seAttitude" value="'+v+'"'+(v===((D&&D.attitude)||5)?' checked':'')+'><span>'+'★'.repeat(v)+'☆'.repeat(5-v)+'</span></label>').join('')+'</div></div>')+'<div class="srow"><div class="n"></div><div><input type="text" id="seNote" placeholder="메모 (내부용, 선택)" style="width:100%"></div></div>'+
   '<div class="bar" style="margin-top:14px"><span class="note">기본값은 전부 "완료". 다른 것만 바꾸고 저장하세요.</span><span class="sp"></span><a class="btn" href="#/student/'+s.id+'">취소</a><button class="btn b" data-act="saveSession" data-id="'+s.id+'">저장</button></div></div>';
 }
 function noticeEditor(x){
@@ -1510,6 +1641,7 @@ function sessionConfirm(s,r){
   const parts=[sd.hw.length?'숙제 '+line(sd.hw):null,sd.ip.length?'교재 '+line(sd.ip):null,sd.vt.length?'단어 '+line(sd.vt):null].filter(Boolean);
   const tests=activeTracks(s.id).filter(t=>t.status==='TEST_REQUIRED');const x=r.session;
   return '<h1>저장됨 · '+h(s.name)+'</h1><p class="sub">'+h(x.session_date)+' 세션이 기록되고 State가 갱신되었습니다. 아래 알림장을 다듬어 복사하거나, 알림장 보드에서 전체를 한 번에 복사하세요.</p>'+
+  (x.corrected?'<div class="ban">정정 알림장입니다 — 앞서 보낸 알림장을 대신해 학부모께 다시 보내 주세요. (알림장 맨 위에 정정 안내 한 줄이 붙어 있습니다)</div>':'')+(lateInfo(x)?'<div class="ban">입력 마감('+h(deadlineOf(x.location_id))+') 이후에 기록되어 알림장 보드에 "마감 후 입력"으로 표시됩니다.</div>':'')+
   '<div class="confirm"><div class="big">다음 시간 → '+h(parts.join(' / '))+'</div>'+
   (tests.length?'<div>'+tests.map(t=>badge('b-brass',bookOf(t).book_name+' 완료 → 성취테스트 준비 (교재 시험 화면)')).join(' ')+'</div>':'')+
   (r.newAlerts.length?'<div style="margin-top:6px">'+r.newAlerts.map(a=>badge(SEV_CLS[a.severity]||'b-info','⚠ '+a.message+' → '+a.action)).join(' ')+'</div>':'<div class="note" style="margin-top:6px">새 Alert 없음</div>')+'</div>'+
@@ -1629,6 +1761,106 @@ function bulkCommit(r){
     n++;}
   persist();return n;
 }
+// ===== 진도 시트 반영 — '지금 할 Unit 입력 시트'(담임·학생·교재/Unit×4)를 붙여 넣어 학생별 교재·Unit을 한 번에 맞춘다 =====
+const SHEET_COLS=['담임','학생','리딩교재','리딩 Unit','문법교재','문법 Unit','라이팅교재','라이팅 Unit','단어교재','단어 Unit'];
+const SHEET_CATS=[['READING_HW',2,3],['GRAMMAR',4,5],['WRITING',6,7],['VOCAB',8,9]];
+let PROGRESS_PREVIEW=null;
+function cleanBookName(raw){let n=String(raw||'').trim();n=n.replace(/\([^)]*\)/g,' ').replace(/（[^）]*）/g,' ');if(n.includes(','))n=n.split(',')[0];return n.replace(/\s+/g,' ').trim();}
+// Unit 칸 해석: 숫자·Unit n → 번호 / Unit5.3·U4-2·ch3 unit4 → 챕터형 / p.55 등 → 메모 / 다음 교재 예정 → 완료
+function parseUnitCell(raw){const r=String(raw||'').replace(/\s+/g,' ').trim();if(!r)return {kind:'empty',raw:''};
+  if(/다음\s*교재|마지막\s*페이지|완료|끝/.test(r))return {kind:'done',raw:r};
+  if(/리뷰|review/i.test(r))return {kind:'note',raw:r};
+  let m=/^(?:unit|u|lesson|l|day|part|chapter|ch)?\s*\.?\s*(\d{1,3})$/i.exec(r);if(m)return {kind:'unit',n:Number(m[1]),raw:r};
+  m=/^(?:unit|u|ch(?:apter)?)\s*\.?\s*(\d+)\s*[.\-/,]?\s*(?:unit|u)?\s*\.?\s*(\d+)$/i.exec(r);if(m)return {kind:'chapter',ch:Number(m[1]),sub:Number(m[2]),raw:r};
+  m=/^ch(?:apter)?\s*\.?\s*(\d+)\s*[.\-/, ]*\s*(?:unit|u)\s*\.?\s*(\d+)$/i.exec(r);if(m)return {kind:'chapter',ch:Number(m[1]),sub:Number(m[2]),raw:r};
+  return {kind:'note',raw:r};}
+function bookAliases(){S.meta.book_aliases=S.meta.book_aliases||{};return S.meta.book_aliases;}
+// 같은 책의 다른 표기(Reading Tutor Junior 3 = 리딩튜터 주니어 3, GR_Inside2 = Grammar Inside 2)를 같은 키로 본다
+function bookKey(name){let k=normName(name).replace(/[_\-.·]/g,'');k=k.replace(/readingtutorjunior/g,'리딩튜터주니어').replace(/readingtutorstarter/g,'리딩튜터스타터').replace(/^grinside/,'grammarinside').replace(/달콤한리터러시/g,'달곰한literacyreadinglevel').replace(/달곰한리터러시/g,'달곰한literacyreadinglevel').replace(/autovoca/g,'autovoca');return k;}
+// EPL 커리큘럼 맵의 표기 규칙: 초등 Grammar Inside 1·2 = 'Grammar Inside1 초등'·'Grammar Inside2 초등', 초등 4·5·6 = 'Grammar Inside 4·5·6' (초등 3은 맵에 없음 → 원장이 결정)
+const SHEET_ALIASES={'초등grammarinside1':'Grammar Inside1 초등','초등grammarinside2':'Grammar Inside2 초등','초등grammarinside4':'Grammar Inside 4','초등grammarinside5':'Grammar Inside 5','초등grammarinside6':'Grammar Inside 6','grinside4':'Grammar Inside 4','grinside5':'Grammar Inside 5','grinside6':'Grammar Inside 6'};
+// 부분 일치는 숫자 경계와 구분어(초등·중등·주니어·스타터·기본·완성…)를 지킨다 — 'Autovoca10'이 'Auto Voca 1'에, '초등 Grammar Inside 2'가 중등 'Grammar Inside 2'에 붙지 않게
+const BOOK_DISTINCT=['초등','중등','고등','주니어','스타터','starter','junior','기본','완성','실전','실력','workbook','wb'];
+function looseBookMatch(a,k){for(const t of BOOK_DISTINCT)if(a.includes(t)!==k.includes(t))return false;const chk=(long,short)=>{const i=long.indexOf(short);if(i<0)return false;const after=long[i+short.length];return !(after&&/\d/.test(after)&&/\d/.test(short.slice(-1)));};return chk(a,k)||chk(k,a);}
+function findBookForSheet(cat,clean){if(!clean)return null;const key=normName(clean);const al=bookAliases()[key];if(al){const b=byId(S.books,al);if(b)return b;}
+  const live=S.books.filter(b=>b.active!==false);const byName=n=>live.find(b=>normName(b.book_name)===normName(n));
+  if(SHEET_ALIASES[key]){const b=byName(SHEET_ALIASES[key]);if(b)return b;}
+  const bk=bookKey(clean);const sameKey=live.filter(b=>bookKey(b.book_name)===bk).sort((x,y)=>((y.grid&&y.grid.length)?1:0)-((x.grid&&x.grid.length)?1:0));
+  return live.find(b=>b.category===cat&&normName(b.book_name)===key)||live.find(b=>normName(b.book_name)===key)||sameKey.find(b=>b.category===cat)||sameKey[0]||live.find(b=>b.category===cat&&looseBookMatch(normName(b.book_name),key))||null;}
+function findStudentForSheet(name,teacherName){const key=normName(name);if(!key)return null;let cands=S.students.filter(s=>s.status!=='WITHDRAWN'&&normName(s.name)===key);
+  if(!cands.length)cands=S.students.filter(s=>s.status!=='WITHDRAWN'&&normName(s.name).replace(/[a-z]$/,'')===key.replace(/[a-z]$/,''));
+  if(cands.length>1&&teacherName){const t=S.teachers.find(x=>normName(x.name)===normName(teacherName));if(t){const c2=cands.filter(s=>s.homeroom_teacher_id===t.id);if(c2.length)cands=c2;}}
+  return {student:cands[0]||null,ambiguous:cands.length>1};}
+function parseProgressSheet(text){
+  const lines=String(text||'').split(/\r?\n/).map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim());if(!lines.length)return {rows:[],errors:['비어 있음'],unresolved:[],chapterBooks:[]};
+  const sep=lines[0].includes('\t')?'\t':',';
+  const split=l=>{const out=[];let cur='',q=false;for(let i=0;i<l.length;i++){const c=l[i];if(c==='"'){if(q&&l[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===sep&&!q){out.push(cur);cur='';}else cur+=c;}out.push(cur);return out.map(x=>x.trim());};
+  let rows=lines.map(split);if(normName(rows[0][1]||'')==='학생'||normName(rows[0][0]||'')==='담임')rows=rows.slice(1);
+  const errors=[];const out=[];const unresolvedMap=new Map();const chapterBooks=new Map();const today=todayISO();
+  rows.forEach((c,i)=>{const teacherName=c[0]||'',name=c[1]||'';if(!name){return;}
+    const fs=findStudentForSheet(name,teacherName);const s=fs.student;const row={line:i+2,teacherName,name,student:s,ambiguous:fs.ambiguous,cells:[],teacher:null};
+    if(!s){errors.push((i+2)+'행 '+name+': 학생을 찾지 못함 (이름 확인)');out.push(row);return;}
+    if(teacherName){const t=S.teachers.find(x=>normName(x.name)===normName(teacherName));row.teacher=t||null;if(t&&t.id!==s.homeroom_teacher_id)row.teacherDiff=t;}
+    for(const [cat,bi,ui] of SHEET_CATS){const rawBook=c[bi]||'',rawUnit=c[ui]||'';const cur=activeTracks(s.id).filter(t=>t.category===cat);const cell={cat,rawBook,rawUnit,clean:cleanBookName(rawBook),book:null,parsed:parseUnitCell(rawUnit),current:cur[0]||null,action:'SKIP',warn:[]};
+      if(!cell.clean&&cell.parsed.kind==='empty'){cell.action='SKIP';if(cell.current)cell.warn.push('시트 비어 있음 · OS 교재 유지');row.cells.push(cell);continue;}
+      if(/없음|선정\s*필요|미정|없다/.test(cell.clean)){cell.action='NONE';cell.warn.push('교재 선정 필요');row.cells.push(cell);continue;}
+      if(!cell.clean){cell.action=cell.current?'UNIT_ONLY':'SKIP';if(!cell.current)cell.warn.push('교재 칸 없음 · OS에도 교재 없음');row.cells.push(cell);continue;}
+      const curBook=cell.current?bookOf(cell.current):null;
+      if(curBook&&bookKey(curBook.book_name)===bookKey(cell.clean)){cell.book=curBook;cell.action='SAME_BOOK';}
+      else cell.book=findBookForSheet(cat,cell.clean);
+      if(!cell.book){cell.action='NEW_BOOK';const k=cat+'|'+normName(cell.clean);if(!unresolvedMap.has(k))unresolvedMap.set(k,{key:k,cat,name:cell.clean,count:0});unresolvedMap.get(k).count++;}
+      else if(cell.action!=='SAME_BOOK'){cell.action=(cell.current&&cell.current.book_id===cell.book.id)?'SAME_BOOK':'SWITCH_BOOK';if(cell.book.category!==cat)cell.warn.push('교재 분류 다름 ('+CAT_S[cell.book.category]+')');}
+      if((cell.action==='SWITCH_BOOK'||cell.action==='NEW_BOOK')&&cell.parsed.kind!=='unit'){const pos=cell.current&&cell.current.next_unit_id?unitsOf(bookOf(cell.current)).findIndex(u=>u.id===cell.current.next_unit_id)+1:0;cell.carry=pos>1?pos:0;cell.warn.push(cell.carry?'Unit 번호 없음 → 기존 진도 위치(Unit '+cell.carry+') 이어감':'Unit 번호 없음 → Unit 1부터');}
+      if(cell.parsed.kind==='chapter'){const bk=cell.book?cell.book.id:'new:'+cat+'|'+normName(cell.clean);const name=cell.book?cell.book.book_name:cell.clean;if(!chapterBooks.has(bk))chapterBooks.set(bk,{key:bk,name,examples:[]});const e=chapterBooks.get(bk).examples;if(e.length<3)e.push(cell.parsed.raw);}
+      row.cells.push(cell);}
+    out.push(row);});
+  return {rows:out,errors,unresolved:[...unresolvedMap.values()],chapterBooks:[...chapterBooks.values()],today};
+}
+function unitTargetOf(cell,perChapter){const p=cell.parsed;if(p.kind==='unit')return p.n;if(p.kind==='chapter'&&perChapter>0)return (p.ch-1)*perChapter+p.sub;return null;}
+function progressPreviewHtml(P){
+  if(!P)return '';const bookOpts=(cat,sel)=>'<option value="__new"'+(sel==='__new'?' selected':'')+'>새 교재로 만들기 (맵 밖)</option><option value="__skip">건너뛰기</option>'+CATS.map(c=>'<optgroup label="'+CAT_L[c]+(c===cat?' ★':'')+'">'+opt(S.books.filter(b=>b.active!==false&&b.category===c).sort((a,b)=>a.book_name.localeCompare(b.book_name)),sel,b=>b.book_name)+'</optgroup>').join('');
+  const unres=P.unresolved.length?'<div class="panel" style="border-color:var(--brass)"><h3 style="margin-top:0">OS에 없는 교재명 '+P.unresolved.length+'개 — 어떤 교재인지 고르세요</h3><p class="note">그대로 두면 시트 이름 그대로 "맵 밖 교재"가 새로 만들어집니다(Unit 12개, 단어는 30개). 기존 교재와 같은 책이면 골라 주세요 — 한 번 고르면 다음부터 자동으로 연결됩니다.</p><div class="tw"><table class="t" style="font-size:13px"><tbody>'+P.unresolved.map(u=>'<tr><td><b>'+h(u.name)+'</b><div class="note">'+CAT_S[u.cat]+' · '+u.count+'명</div></td><td><select class="ps_map" data-key="'+h(u.key)+'" data-cat="'+u.cat+'">'+bookOpts(u.cat,'__new')+'</select></td></tr>').join('')+'</tbody></table></div></div>':'';
+  const chap=P.chapterBooks.length?'<div class="panel"><h3 style="margin-top:0">챕터형 진도 ('+P.chapterBooks.length+'개 교재) — 챕터당 Unit 수를 알면 번호로 바꿉니다</h3><p class="note">예: "Unit5.3"에 챕터당 3이면 → Unit 15. 비워 두면 번호는 바꾸지 않고 시트 문구를 진도 메모로만 남깁니다.</p><div class="row">'+P.chapterBooks.map(cb=>'<label class="f">'+h(cb.name)+' <span class="note">'+cb.examples.map(h).join(' · ')+'</span><input type="number" class="ps_chap" data-key="'+h(cb.key)+'" min="1" max="20" placeholder="챕터당" style="width:84px"></label>').join('')+'</div></div>':'';
+  const cellHtml=(row,cell)=>{if(!row.student)return '<td class="note">—</td>';const p=cell.parsed;const unitTxt=p.kind==='unit'?'→ Unit '+p.n:p.kind==='chapter'?'<span class="note">챕터형 '+h(p.raw)+'</span>':p.kind==='done'?badge('b-brass','완료 · 다음 교재'):p.kind==='note'?'<span class="note">메모 '+h(p.raw)+'</span>':'';
+    const bookTxt=cell.action==='SKIP'?(cell.current?'<span class="note">'+h(bookOf(cell.current).book_name)+' 유지</span>':'<span class="note">—</span>'):cell.action==='NONE'?badge('b-warn','교재 선정 필요'):cell.action==='UNIT_ONLY'?h(bookOf(cell.current).book_name):cell.action==='NEW_BOOK'?h(cell.clean)+' '+badge('b-warn','새 교재'):cell.action==='SWITCH_BOOK'?h(cell.book.book_name)+' '+badge('b-info','교체'+(cell.current?' ← '+h(bookOf(cell.current).book_name):''))+'':h(cell.book.book_name)+' '+badge('b-good','일치');
+    return '<td>'+bookTxt+(unitTxt?'<div>'+unitTxt+'</div>':'')+(cell.warn.length?'<div class="note" style="color:var(--warn)">'+cell.warn.map(h).join(' · ')+'</div>':'')+'</td>';};
+  const okRows=P.rows.filter(r=>r.student).length;
+  return (P.errors.length?'<div class="ban">'+P.errors.map(h).join('<br>')+'</div>':'')+unres+chap+
+  '<div class="tw"><table class="t" style="font-size:12px"><thead><tr><th>학생</th><th>리딩</th><th>문법</th><th>라이팅</th><th>단어</th></tr></thead><tbody>'+P.rows.map(r=>'<tr'+(r.student?'':' style="opacity:.5"')+'><td><b>'+h(r.name)+'</b>'+(r.student?'<div class="note">'+h(nameOf(S.locations,r.student.location_id))+(r.teacherDiff?' · 담임 시트 '+h(r.teacherDiff.name)+' / OS '+h(nameOf(S.teachers,r.student.homeroom_teacher_id)):'')+(r.ambiguous?' · <span style="color:var(--warn)">동명이인</span>':'')+'</div>':'<div class="note" style="color:var(--bad)">학생 없음</div>')+'</td>'+(r.student?r.cells.map(c=>cellHtml(r,c)).join(''):'<td colspan="4"></td>')+'</tr>').join('')+'</tbody></table></div>'+
+  '<div class="bar" style="margin-top:10px"><label class="note"><input type="checkbox" id="ps_teacher"> 담임도 시트대로 바꾸기 ('+P.rows.filter(r=>r.teacherDiff).length+'명 다름)</label><span class="sp"></span><span class="note">학생 '+okRows+'/'+P.rows.length+'명 · 새 교재 '+P.unresolved.length+'개</span><button class="btn b" data-act="progressApply">이대로 반영</button></div>';
+}
+function ensureUnits(b,n){const us=unitsOf(b);if(us.length>=n)return;const label=b.unit_label||'Unit';for(const u of us)u.is_final=false;for(let i=us.length+1;i<=n;i++)b.units.push({id:b.id+'_u'+i,seq_no:i,unit_name:label+' '+i,is_final:i===n});}
+function applyProgressSheet(P,decisions){
+  const today=todayISO();const stats={students:0,unit:0,switched:0,newBooks:0,notes:0,skipped:0,teacher:0};const newBooks=new Map();const al=bookAliases();
+  for(const row of P.rows){if(!row.student)continue;const s=row.student;let changed=[];
+    if(decisions.teacher&&row.teacherDiff){s.homeroom_teacher_id=row.teacherDiff.id;stats.teacher++;changed.push('담임 → '+row.teacherDiff.name);}
+    for(const cell of row.cells){
+      if(cell.action==='SKIP'||cell.action==='NONE'){stats.skipped++;continue;}
+      let b=cell.book;
+      if(cell.action==='NEW_BOOK'){const d=decisions.map[cell.cat+'|'+normName(cell.clean)];if(d==='__skip'){stats.skipped++;continue;}
+        if(d&&d!=='__new'){b=byId(S.books,d);if(b)al[normName(cell.clean)]=b.id;}
+        if(!b){const k=cell.cat+'|'+normName(cell.clean);b=newBooks.get(k)||S.books.find(x=>normName(x.book_name)===normName(cell.clean));
+          if(!b){b=mkBook(uid('bk'),cell.cat,cell.clean,'','Unit',cell.cat==='VOCAB'?30:12,cell.cat==='GRAMMAR'||cell.cat==='READING_HW',null,null,null,null);b.units_placeholder=true;S.books.push(b);stats.newBooks++;}
+          newBooks.set(k,b);}}
+      if(cell.action==='UNIT_ONLY')b=bookOf(cell.current);
+      if(!b){stats.skipped++;continue;}
+      const per=decisions.chap[b.id]||decisions.chap['new:'+cell.cat+'|'+normName(cell.clean)]||0;let target=unitTargetOf(cell,per);
+      let t=activeTracks(s.id).find(x=>x.book_id===b.id);
+      if(!t&&!target&&cell.carry)target=cell.carry;
+      if(!t){for(const o of activeTracks(s.id).filter(x=>x.category===b.category&&x.book_id!==b.id))endTrack(o,today);
+        if(target)ensureUnits(b,target);const cur=target&&target>1?(unitsOf(b)[target-2]||null):null;t=addTrack(s.id,b.id,cur?cur.id:null,defaultMode(b.category),today);if(t&&t.delivery_mode==='ACADEMY'&&!defaultTrack(s))s.default_track_id=t.id;stats.switched++;changed.push(CAT_S[b.category]+' '+b.book_name+(target?' → Unit '+target:''));}
+      else if(target){ensureUnits(b,target);const cur=target>1?unitsOf(b)[target-2]:null;const before=t.next_unit_id;updateTrackState(t,cur?cur.id:null,null,today);if(t.next_unit_id!==before){stats.unit++;changed.push(CAT_S[b.category]+' '+b.book_name+' → Unit '+target);}}
+      const p=cell.parsed;const note=(p.kind==='note'||p.kind==='done'||(p.kind==='chapter'&&!target))?p.raw:'';
+      if((t.progress_note||'')!==note){t.progress_note=note;if(note){stats.notes++;changed.push(CAT_S[b.category]+' 메모 "'+note+'"');}}
+      t.sheet_synced_at=today;if(p.kind==='done')t.sheet_done=true;else delete t.sheet_done;}
+    if(changed.length){stats.students++;S.chart_notes.push({id:uid('cn'),student_id:s.id,date:today,teacher_id:myId(null),kind:'진도',text:'진도 시트 반영: '+changed.join(' · ')});}
+  }
+  S.meta.progress_sheet_applied_at=today;persist();return stats;
+}
+// 지금 OS 상태로 시트 양식을 만든다 (선생님들이 이걸 받아 고쳐 보내면 다시 붙여 넣는다)
+function progressSheetExport(loc){const rows=[SHEET_COLS.join('\t')];const sts=S.students.filter(s=>s.status==='ACTIVE'&&(!loc||s.location_id===loc)).sort((a,b)=>nameOf(S.teachers,a.homeroom_teacher_id).localeCompare(nameOf(S.teachers,b.homeroom_teacher_id),'ko')||a.name.localeCompare(b.name,'ko'));
+  for(const s of sts){const c=[nameOf(S.teachers,s.homeroom_teacher_id),s.name];for(const [cat] of SHEET_CATS){const t=activeTracks(s.id).find(x=>x.category===cat);const b=t?bookOf(t):null;c.push(b?b.book_name:'');c.push(t&&t.next_unit_id?String(unitsOf(b).findIndex(u=>u.id===t.next_unit_id)+1):(t&&t.progress_note?t.progress_note:''));}rows.push(c.join('\t'));}
+  return rows.join('\n');}
 const RULE_FIELDS=[
   ['VOCAB_THRESHOLD','단어 Test 판정','vocab_pass','PASS 기준 % 이상',90],['VOCAB_THRESHOLD','','vocab_check','CHECK 기준 % 이상 (미만은 RETEST)',80],
   ['COMPLETION_TEST_DEFAULT','Completion Test 기본 Pass','pass_score','교재에 값이 없을 때 %',80],
@@ -1636,7 +1868,9 @@ const RULE_FIELDS=[
   ['HW_MISS','숙제 미완료','streak','연속 횟수',2],['UNIT_REPEAT','동일 Unit 반복','count','세션 횟수',3],['VOCAB_RETEST','단어 재시험 반복','streak','연속 횟수',2],
   ['STAGNATION','교재 정체','multiplier','Unit 수 × 배수 = 기준 세션 수',1.5],['WRITING_MISS','Writing 미완료','streak','연속 횟수',3],
   ['DECLINE','성취도 하락','window','비교 구간 (세션 수)',5],['DECLINE','','drop_pp','하락 폭 %p',15],
-  ['OVERRIDE_REPEAT','Override 반복','count','횟수',3],['OVERRIDE_REPEAT','','days','기간 (일)',30]
+  ['OVERRIDE_REPEAT','Override 반복','count','횟수',3],['OVERRIDE_REPEAT','','days','기간 (일)',30],
+  ['HW_MISS_DIRECTOR','숙제 미제출 누적 → 원장 보고','count','횟수 (기간 내)',3],['HW_MISS_DIRECTOR','','days','기간 (일)',30],
+  ['TEST_DUE','RTP · NELT 재검사 주기','rtp_months','RTP 마지막 테스트 후 (개월)',3],['TEST_DUE','','nelt_months','NELT 마지막 테스트 후 (개월)',3]
 ];
 function viewAdmin(q){
   if(!isDirector())return roleGate();
@@ -1645,7 +1879,7 @@ function viewAdmin(q){
   '<div class="grid g2"><div class="panel"><h2>판정·예외 기준</h2><table class="t"><tbody>'+RULE_FIELDS.map(([code,label,key,desc,def])=>'<tr><td>'+(label?'<b>'+label+'</b><div class="note">'+code+'</div>':'')+'</td><td>'+desc+'</td><td><input type="number" step="any" class="rule" data-code="'+code+'" data-key="'+key+'" value="'+h((R[code]||{})[key]!=null?R[code][key]:def)+'"></td></tr>').join('')+
   '<tr><td><b>CHECK 구간 처리</b><div class="note">VOCAB_CHECK_MODE</div></td><td>80~89%일 때</td><td><select class="rule" data-code="VOCAB_CHECK_MODE" data-key="mode"><option value="ADVANCE"'+(R.VOCAB_CHECK_MODE.mode!=='REPEAT'?' selected':'')+'>다음 Unit 진행 + CHECK 표시</option><option value="REPEAT"'+(R.VOCAB_CHECK_MODE.mode==='REPEAT'?' selected':'')+'>같은 Unit 재시험</option></select></td></tr>'+
   '</tbody></table><div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveRules">기준 저장</button></div></div>'+
-  '<div><div class="panel"><h2>지점</h2><p class="note">지점을 추가하면 학생·강사 배정, 시간표, 알림장 보드, 대시보드에 바로 나타납니다. 학생이나 강사가 배정된 지점은 삭제할 수 없습니다.</p><div class="tw"><table class="t"><thead><tr><th>지점명</th><th>수업(분)</th><th>학생</th><th>강사</th><th></th></tr></thead><tbody>'+S.locations.map(l=>{const ns=S.students.filter(x=>x.location_id===l.id&&x.status!=='WITHDRAWN').length,nt=S.teachers.filter(t=>t.location_id===l.id).length;return '<tr><td><input type="text" class="locname" data-id="'+l.id+'" value="'+h(l.name)+'"></td><td><input type="number" class="locmin" data-id="'+l.id+'" value="'+h(l.session_minutes||80)+'" min="10" step="5" style="width:70px"></td><td>'+ns+'명</td><td>'+nt+'명</td><td>'+(S.locations.length>1&&!ns&&!nt?'<button class="btn s d" data-act="delLocation" data-id="'+l.id+'">삭제</button>':'')+'</td></tr>';}).join('')+'</tbody></table></div><div class="bar" style="margin-top:10px"><button class="btn p" data-act="saveLocations">지점 저장</button></div><div class="row" style="margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px"><input type="text" id="loc_name" placeholder="새 지점 이름 (예: 판교 3관)"><input type="number" id="loc_min" value="80" min="10" step="5" style="width:80px" title="수업 시간(분)"><label class="f">설정 복사<select id="loc_copy">'+opt(S.locations,S.locations[0].id)+'</select></label><button class="btn" data-act="addLocation">지점 추가</button></div><p class="note" style="margin:6px 0 0">Flow 순서·시간표 슬롯은 고른 지점 설정을 복사해 시작합니다. 아래에서 바꿀 수 있습니다.</p></div>'+
+  '<div><div class="panel"><h2>지점</h2><p class="note">지점을 추가하면 학생·강사 배정, 시간표, 알림장 보드, 대시보드에 바로 나타납니다. 학생이나 강사가 배정된 지점은 삭제할 수 없습니다. <b>진도 입력 마감</b>은 그날 세션 입력을 끝내야 하는 시각입니다 — 오늘 화면과 알림장 보드에 남은 시간이 보이고, 그 뒤의 입력·수정은 "마감 후"로 표시됩니다.</p><div class="tw"><table class="t"><thead><tr><th>지점명</th><th>수업(분)</th><th>진도 입력 마감</th><th>학생</th><th>강사</th><th></th></tr></thead><tbody>'+S.locations.map(l=>{const ns=S.students.filter(x=>x.location_id===l.id&&x.status!=='WITHDRAWN').length,nt=S.teachers.filter(t=>t.location_id===l.id).length;return '<tr><td><input type="text" class="locname" data-id="'+l.id+'" value="'+h(l.name)+'"></td><td><input type="number" class="locmin" data-id="'+l.id+'" value="'+h(l.session_minutes||80)+'" min="10" step="5" style="width:70px"></td><td><input type="time" class="locdl" data-id="'+l.id+'" value="'+h(l.entry_deadline||DEFAULT_ENTRY_DEADLINE)+'" title="이 시각 이후 입력·수정은 알림장 보드에 \'마감 후\'로 표시됩니다"></td><td>'+ns+'명</td><td>'+nt+'명</td><td>'+(S.locations.length>1&&!ns&&!nt?'<button class="btn s d" data-act="delLocation" data-id="'+l.id+'">삭제</button>':'')+'</td></tr>';}).join('')+'</tbody></table></div><div class="bar" style="margin-top:10px"><button class="btn p" data-act="saveLocations">지점 저장</button></div><div class="row" style="margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px"><input type="text" id="loc_name" placeholder="새 지점 이름 (예: 판교 3관)"><input type="number" id="loc_min" value="80" min="10" step="5" style="width:80px" title="수업 시간(분)"><label class="f">설정 복사<select id="loc_copy">'+opt(S.locations,S.locations[0].id)+'</select></label><button class="btn" data-act="addLocation">지점 추가</button></div><p class="note" style="margin:6px 0 0">Flow 순서·시간표 슬롯은 고른 지점 설정을 복사해 시작합니다. 아래에서 바꿀 수 있습니다.</p></div>'+
   '<div class="panel"><h2>지점 Flow 순서</h2><p class="note">세션 입력 화면의 ①~⑤ 순서. BOOK=원서+Quiz, HW=숙제 검사, IP=오늘 교재, VT=단어 Test, WR=Writing 교재를 오늘 교재 행에 기본으로 추가</p><table class="t"><tbody>'+S.locations.map(l=>'<tr><td><b>'+h(l.name)+'</b><div class="note">'+l.session_minutes+'분</div></td><td>'+[0,1,2,3,4].map(i=>'<select class="flow" data-loc="'+l.id+'" data-i="'+i+'">'+SLOTS.map(k=>'<option value="'+k+'"'+(l.flow_order[i]===k?' selected':'')+'>'+k+'</option>').join('')+'</select>').join(' ')+'</td></tr>').join('')+'</tbody></table><div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveFlow">순서 저장</button></div></div>'+
   '<div class="panel"><h2>강사 · 로그인</h2><p class="note">첫 화면 로그인에 쓰는 이름·역할·PIN입니다. 원장(관리자)은 대시보드·결정·권한표·설정을 볼 수 있고, 강사는 오늘·학생·할 일만 봅니다. PIN을 비우면 기본값(원장 '+h(S.meta.director_pin||'0000')+' · 강사 1234).</p><div class="tw"><table class="t"><thead><tr><th>이름</th><th>역할</th><th>PIN</th><th>지점</th><th></th></tr></thead><tbody>'+S.teachers.map(t=>'<tr><td><b>'+h(t.name)+'</b>'+(currentUser()&&currentUser().id===t.id?' <span class="badge b-brass">나</span>':'')+'</td><td><select class="trole" data-id="'+t.id+'"><option value="TEACHER"'+(t.role!=='DIRECTOR'&&t.role!=='STAFF'?' selected':'')+'>강사</option><option value="STAFF"'+(t.role==='STAFF'?' selected':'')+'>실장 (데스크)</option><option value="DIRECTOR"'+(t.role==='DIRECTOR'?' selected':'')+'>원장 (관리자)</option></select></td><td><input type="text" class="tpin" data-id="'+t.id+'" value="'+h(t.pin||'')+'" placeholder="'+(t.role==='DIRECTOR'?h(S.meta.director_pin||'0000'):'1234')+'" inputmode="numeric" style="width:90px"></td><td><select class="tloc" data-id="'+t.id+'"><option value="">두 지점</option>'+opt(S.locations,t.location_id||'')+'</select></td><td><button class="btn s d" data-act="delTeacher" data-id="'+t.id+'">삭제</button></td></tr>').join('')+'</tbody></table></div><div class="bar" style="margin-top:10px"><button class="btn p" data-act="savePins">역할·PIN 저장</button></div><div class="row" style="margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px"><input type="text" id="tf_name" placeholder="이름"><select id="tf_role"><option value="TEACHER">강사</option><option value="STAFF">실장 (데스크)</option><option value="DIRECTOR">원장 (관리자)</option></select><input type="text" id="tf_pin" placeholder="PIN" inputmode="numeric" style="width:90px"><button class="btn" data-act="addTeacher">추가</button></div></div>'+
   '<div class="panel"><h2>원서 카탈로그</h2><p class="note">샘플 원서의 AR은 참고용입니다.</p><div class="tw" style="max-height:220px;overflow:auto"><table class="t"><tbody>'+S.original_books.map(b=>'<tr><td>'+h(b.title)+'</td><td class="note">'+h(b.series||'')+'</td><td>AR '+h(b.ar_level)+'</td><td><button class="btn s d" data-act="delBook" data-id="'+b.id+'">삭제</button></td></tr>').join('')+'</tbody></table></div><div class="row" style="margin-top:10px"><input type="text" id="ob_title" placeholder="제목"><input type="text" id="ob_series" placeholder="시리즈" style="min-width:90px"><input type="number" step="0.1" id="ob_ar" placeholder="AR"><button class="btn" data-act="addBook">추가</button></div></div></div></div>'+
@@ -1657,7 +1891,7 @@ function viewAdmin(q){
   '<div class="panel"><h2>외부 도구 연결</h2><p class="note">EPL이 이미 쓰는 도구의 주소입니다. 해당 화면에서 버튼으로 열립니다.</p><div class="row"><label class="f" style="flex:1;min-width:260px">성취테스트 빌더<input type="text" id="tool_tb" value="'+h((S.meta.tools||{}).test_builder||'')+'" style="width:100%"></label><label class="f" style="flex:1;min-width:260px">리포트 라이브러리(기존)<input type="text" id="tool_rl" value="'+h((S.meta.tools||{}).report_library||'')+'" style="width:100%"></label><label class="f" style="flex:1;min-width:260px">랭크 시스템(기존)<input type="text" id="tool_rs" value="'+h((S.meta.tools||{}).rank_system||'')+'" style="width:100%"></label><label class="f" style="flex:1;min-width:260px">칭찬모아 (포인트 지급)<input type="text" id="tool_pa" value="'+h((S.meta.tools||{}).praise_app||'')+'" style="width:100%"></label><button class="btn p" data-act="saveTools">저장</button></div></div>'+
   '<div class="panel"><h2>랭킹 포인트 규칙</h2><div class="row">'+[['unit_done','Unit 완료'],['hw_done','숙제'],['online_done','온라인 학습'],['vocab_pass','단어 통과'],['vocab_check','단어 확인'],['test_pass','성취테스트 PASS'],['attitude5','수업태도 ★5'],['book_read','원서 1권'],['writing_piece','작품 1편']].map(([k,l])=>'<label class="f">'+l+'<input type="number" class="pt" data-k="'+k+'" value="'+h((S.meta.points||{})[k]!=null?S.meta.points[k]:0)+'" style="width:70px"></label>').join('')+'<button class="btn p" data-act="savePoints">저장</button></div></div>'+
   '<div class="panel"><h2>월간 리포트 설정</h2><p class="note">영역 항목은 쉼표로 구분합니다. 기본 항목(원서 읽기·개별 진도·라이팅·단어·숙제·학습 태도)은 기록으로 점수를 제안하고, 추가 항목은 선생님이 직접 매깁니다.</p><label class="f">영역 항목<input type="text" id="rp_areas" value="'+h((S.meta.report_areas||DEFAULT_REPORT_AREAS).join(', '))+'" style="width:100%"></label><label class="f" style="margin-top:8px">AI 작성 지침 (프롬프트 복사 시 맨 앞에 붙음)<textarea id="rp_prompt" style="min-height:200px">'+h(S.meta.report_prompt||DEFAULT_REPORT_PROMPT)+'</textarea></label><div class="bar" style="margin-top:10px"><button class="btn p" data-act="saveReportSettings">리포트 설정 저장</button><button class="btn" data-act="resetReportPrompt">기본 지침으로</button></div></div>'+
-  (()=>{const bytes=JSON.stringify(S).length;const cap=5*1024*1024;const pct=Math.round(bytes/cap*1000)/10;const n=S.sessions.length;const per=n?Math.round((bytes-JSON.stringify(Object.assign({},S,{sessions:[]})).length)/n):1200;const left=Math.max(0,Math.floor((cap*0.8-bytes)/Math.max(per,600)));const cls=pct>60?'b-bad':pct>30?'b-warn':'b-good';
+  (()=>{const chars=JSON.stringify(S).length;const bytes=chars*2;const cap=5*1024*1024;const pct=Math.round(bytes/cap*1000)/10;const n=S.sessions.length;const per=n?Math.round((chars-JSON.stringify(Object.assign({},S,{sessions:[]})).length)/n)*2:2400;const left=Math.max(0,Math.floor((cap*0.8-bytes)/Math.max(per,600)));const cls=pct>60?'b-bad':pct>30?'b-warn':'b-good';
   return (()=>{const c=cloudCfg();return '<div class="panel" id="cloudPanel" style="border-color:var(--brass)"><h2>공유 저장소 (어디서 열어도 같은 데이터)</h2><p class="note">연결하면 모든 기기·모든 선생님이 같은 데이터를 봅니다. 저장할 때마다 자동 업로드, 20초마다 다른 기기 변경을 받아옵니다. Supabase 프로젝트 하나면 됩니다 — 만드는 순서는 아래.</p>'+
   '<div class="row"><label class="f" style="flex:1;min-width:280px">Project URL<input type="text" id="cl_url" value="'+h(c.url||'')+'" placeholder="https://xxxx.supabase.co" style="width:100%"></label><label class="f" style="flex:1;min-width:280px">Publishable key (또는 anon key)<input type="text" id="cl_key" value="'+h(c.key||'')+'" placeholder="eyJ…" style="width:100%"></label></div>'+
   '<div class="bar" style="margin-top:10px"><button class="btn p" data-act="cloudSetup">저장 후 연결 화면으로</button>'+(cloudAuthed()?'<button class="btn" data-act="cloudPushNow">지금 이 기기 데이터 업로드</button><button class="btn" data-act="cloudPullNow">공유 데이터 내려받기</button><button class="btn d" data-act="cloudDisconnect">연결 끊기</button><button class="btn" data-act="cloudSnapList">일별 백업 보기</button>':'')+'<span class="note">'+(cloudAuthed()?'연결됨 · '+h(c.email||'')+' · '+h(cloudStatus.text):cloudOn()?'설정됨 · 로그인 필요':'연결 안 됨 (이 브라우저에만 저장)')+'</span></div>'+
@@ -1666,8 +1900,10 @@ function viewAdmin(q){
   '<div class="panel" id="bulkPanel"><h2>학생 일괄 등록 (시트에서 붙여넣기)</h2><p class="note">구글 시트에서 아래 순서로 열을 만들어 복사 → 붙여넣기 → 미리보기 → 등록. 첫 줄이 제목이면 자동으로 건너뜁니다. 교재 이름은 띄어쓰기·대소문자를 무시하고 찾고, 없는 교재는 "맵 밖 교재"로 새로 만듭니다. 없는 강사도 새로 만듭니다(강사 역할·PIN 1234). 같은 이름+지점 학생은 건너뜁니다.</p>'+
   '<div class="tw"><table class="t" style="font-size:12px"><thead><tr>'+BULK_COLS.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody><tr>'+['김민지','5학년','동백 1관','김선생','2.4','월수금','14:30','010-1234-5678','Read It 50','3','Grammar Inside2 초등','5','OK 2','1','Auto Voca 3','12'].map(c=>'<td class="note">'+c+'</td>').join('')+'</tr></tbody></table></div>'+
   '<textarea id="bulkBox" style="margin-top:10px;min-height:120px;font-family:ui-monospace,monospace;font-size:12px" placeholder="여기에 붙여넣기 (탭 또는 쉼표 구분)"></textarea><div class="bar" style="margin-top:8px"><button class="btn" data-act="bulkPreview">미리보기</button><button class="btn p" data-act="bulkCommit">등록</button><button class="btn" data-act="bulkTemplate">열 제목 복사</button><button class="btn b" data-act="bulkNotion">노션 명단 불러오기 (10/16 · 97명)</button><span class="note">교재 Unit 칸 = 지금 할 Unit 번호. 비우면 1.</span></div><div id="bulkOut" style="margin-top:8px"></div></div>'+
-  '<div class="panel"><h2>데이터</h2><div class="metric" style="margin-bottom:10px"><div class="m"><div class="k">저장 용량 (이 브라우저)</div><div class="v">'+Math.round(bytes/1024)+' KB</div><div class="d">'+badge(cls,'브라우저 한도 약 5 MB의 '+pct+'%')+'</div></div><div class="m"><div class="k">세션 기록</div><div class="v">'+n+'회</div><div class="d">세션 1회 ≈ '+per+' bytes (알림장 포함)</div></div><div class="m"><div class="k">남은 여유 (추정)</div><div class="v">'+left.toLocaleString()+'회</div><div class="d">한도의 80%까지 · 학생 30명×주 3회면 약 '+Math.round(left/90)+'주</div></div></div>'+
-  '<p class="note">프로토타입 단계: 데이터는 이 브라우저(localStorage)에만 저장됩니다. 다른 기기·다른 선생님과 공유되지 않고, 브라우저 데이터를 지우면 사라집니다. <b>매주 JSON 내보내기로 백업</b>하세요. 흐름 검증이 끝나면 공유 DB(Supabase)로 전환합니다 — 저장 계층만 바꾸면 되도록 분리해 두었습니다.</p>';})()+
+  '<div class="panel" id="progressPanel" style="border-color:var(--brass)"><h2>진도 시트 반영 (지금 할 Unit 입력 시트)</h2><p class="note">선생님들이 채운 시트(담임 · 학생 · 리딩교재 · 리딩 Unit · 문법교재 · 문법 Unit · 라이팅교재 · 라이팅 Unit · 단어교재 · 단어 Unit)를 구글 시트에서 전체 선택 → 복사 → 아래에 붙여 넣고 <b>미리보기</b>를 누르세요. 학생·교재를 자동으로 맞추고, OS에 없는 교재명은 어떤 교재인지 고르게 합니다. 숫자·"Unit 7"은 바로 Unit 번호로, "p.55"·"리뷰테스트" 같은 글은 진도 메모로 남아 오늘 화면과 세션 입력에 보입니다. 이미 있는 학생만 바꾸고 새 학생은 만들지 않습니다(새 학생은 위 일괄 등록).'+(S.meta.progress_sheet_applied_at?' <b>마지막 반영 '+h(S.meta.progress_sheet_applied_at)+'</b>':'')+'</p>'+
+  '<textarea id="progressBox" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px" placeholder="여기에 붙여넣기 (탭 구분 · 첫 줄 제목 있어도 됨)"></textarea><div class="bar" style="margin-top:8px"><button class="btn p" data-act="progressPreview">미리보기</button><button class="btn" data-act="progressTemplate">현재 OS 진도로 시트 만들기 (복사)</button><span class="note">시트를 만들어 선생님들께 주고, 채워 오면 다시 붙여 넣으세요.</span></div><div id="progressOut" style="margin-top:8px"></div></div>'+
+  '<div class="panel"><h2>데이터</h2><div class="metric" style="margin-bottom:10px"><div class="m"><div class="k">이 기기 캐시 크기</div><div class="v">'+Math.round(bytes/1024)+' KB</div><div class="d">'+badge(LS_FULL?'b-warn':cls,LS_FULL?'localStorage 가득 참 → IndexedDB에 보관 중':'localStorage 한도 약 5 MB의 '+pct+'%')+'</div></div><div class="m"><div class="k">세션 기록</div><div class="v">'+n+'회</div><div class="d">세션 1회 ≈ '+per+' bytes (알림장 포함)</div></div><div class="m"><div class="k">localStorage 남은 여유 (추정)</div><div class="v">'+left.toLocaleString()+'회</div><div class="d">넘어도 저장은 계속됩니다 (IndexedDB로 자동 전환)</div></div></div>'+
+  '<p class="note">'+(cloudAuthed()?'원본은 공유 저장소(Supabase)에 있고, 이 기기에는 사본만 둡니다. 사본은 localStorage에 두되 가득 차면 IndexedDB로 자동 전환되므로 "저장하지 못했습니다" 오류는 더 이상 나지 않습니다. 매일 첫 저장 때 서버에 일별 사본이 남습니다(30일).':'공유 저장소가 연결되지 않아 데이터가 이 브라우저에만 있습니다. 위 "공유 저장소"를 연결하세요. 그 전까지는 <b>매주 JSON 내보내기로 백업</b>하세요.')+'</p>';})()+
   '<div class="row"><label class="f">화면<select id="theme"><option value="auto"'+(S.meta.theme==='auto'?' selected':'')+'>시스템</option><option value="light"'+(S.meta.theme==='light'?' selected':'')+'>라이트</option><option value="dark"'+(S.meta.theme==='dark'?' selected':'')+'>다크</option></select></label><button class="btn" data-act="export">JSON 내보내기</button><button class="btn" data-act="import">JSON 가져오기</button><button class="btn d" data-act="reset">처음 상태로 초기화 (노션 명단)</button></div>'+
   '<textarea id="dataBox" style="margin-top:10px;min-height:120px;font-family:ui-monospace,monospace;font-size:12px" placeholder="내보내기를 누르면 여기에 JSON이 나타납니다. 가져오기는 여기에 JSON을 붙여넣고 누르세요."></textarea></div>';
 }
@@ -1679,13 +1915,15 @@ function viewNotices(q){
   const rows=S.sessions.filter(x=>x.session_date===date&&(!loc||x.location_id===loc)).map(x=>({x,s:studentOf(x.student_id)})).filter(r=>r.s)
     .sort((a,b)=>{const ta=(a.s.schedules.find(y=>y.weekday===wdOf(date))||{}).time||'99',tb=(b.s.schedules.find(y=>y.weekday===wdOf(date))||{}).time||'99';return ta.localeCompare(tb)||a.s.name.localeCompare(b.s.name,'ko');});
   const sent=rows.filter(r=>r.x.sent).length;
+  const missing=S.students.filter(s=>(!loc||s.location_id===loc)&&expectedOn(s,date)&&completionOf(s,date)==='NO_SESSION');
+  const corrected=rows.filter(r=>r.x.corrected&&!r.x.sent).length;const dups=rows.filter(r=>!isPrimarySession(r.x)).length;
   if(q.focus)setTimeout(()=>{const el=$('#np_'+q.focus);if(el){el.scrollIntoView({block:'start'});const ta=el.querySelector('textarea');if(ta)ta.focus();}},60);
   return '<h1>알림장 보드</h1><p class="sub">그날 입력한 세션의 알림장이 모입니다. 폰이면 "공유"로 카톡 대화방에 바로, 연락처가 있으면 "문자"로, 아니면 복사해서 붙여 넣으세요.</p>'+
   '<div class="bar"><label class="f">날짜<input type="date" class="hq" data-k="date" value="'+date+'"></label><label class="f">지점<select class="hq" data-k="loc"><option value="">전체</option>'+opt(S.locations,loc)+'</select></label><span class="sp"></span>'+
-  '<div class="flags">'+badge('b-muted',fmtDateK(date)+' · '+rows.length+'명')+(rows.length?badge(sent===rows.length?'b-good':'b-brass','보냄 '+sent+'/'+rows.length):'')+'</div>'+
+  '<div class="flags">'+badge('b-muted',fmtDateK(date)+' · '+rows.length+'명')+deadlineBadge(date,loc||null)+(missing.length?'<a href="#/home?date='+date+(loc?'&loc='+loc:'')+'" style="text-decoration:none" title="'+h(missing.map(s=>s.name).join(', '))+'">'+badge('b-bad','미입력 '+missing.length+'명')+'</a>':(date<=todayISO()?badge('b-good','전원 입력 완료'):''))+(rows.length?badge(sent===rows.length?'b-good':'b-brass','보냄 '+sent+'/'+rows.length):'')+(corrected?badge('b-warn','정정 재발송 '+corrected):'')+(dups?badge('b-muted','중복 기록 '+dups):'')+'</div>'+
   (rows.length?'<button class="btn p" data-act="copyAll" data-date="'+date+'" data-loc="'+loc+'">전체 복사 ('+rows.length+'명)</button><button class="btn" data-act="markAllSent" data-date="'+date+'" data-loc="'+loc+'">전체 보냄 처리</button>':'')+'</div>'+
-  (rows.length?(()=>{const pa=(S.meta.tools||{}).praise_app;const pts=rows.map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);return '<div class="panel" style="border-color:var(--brass)"><div class="bar"><b>오늘 포인트 (칭찬모아 지급용)</b><span class="note">세션 기록에서 자동 계산 · '+pts.length+'명 · 합계 '+pts.reduce((n,x)=>n+x.d.total,0)+'P</span><span class="sp"></span><button class="btn s" data-act="copyPoints" data-date="'+date+'" data-loc="'+loc+'">포인트 목록 복사</button>'+(pa?'<a class="btn s b" href="'+h(pa)+'" target="_blank" rel="noopener">칭찬모아 열기 ↗</a>':'')+'</div>'+(pts.length?'<div class="tw"><table class="t" style="font-size:13px"><tbody>'+pts.map(x=>'<tr><td style="white-space:nowrap"><b>'+h(x.r.s.name)+'</b></td><td class="note">'+h(pointsText(x.d))+'</td><td style="text-align:right;white-space:nowrap"><b>'+x.d.total+'P</b></td></tr>').join('')+'</tbody></table></div>':'<p class="note" style="margin:6px 0 0">오늘 포인트가 생긴 학생이 없습니다.</p>')+'<p class="note" style="margin:6px 0 0">칭찬모아는 외부 연동(API)이 없어 자동 지급은 되지 않습니다. 목록을 보고 칭찬모아에서 학생·기준을 골라 지급하세요. 포인트 규칙은 설정에서 바꿉니다.</p></div>';})():'')+
-  (rows.length?rows.map(r=>'<div class="panel" id="np_'+r.x.id+'"'+(q.focus===r.x.id?' style="border-color:var(--brass)"':'')+'><div class="bar" style="margin-bottom:8px"><b style="font-size:16px"><a href="#/student/'+r.s.id+'" style="color:inherit;text-decoration:none">'+h(r.s.name)+'</a></b><span class="note">'+h(nameOf(S.locations,r.x.location_id))+' · '+h(nameOf(S.teachers,r.x.teacher_id))+' · '+monthSeq(r.x)+'회차</span><span class="sp"></span>'+(r.x.sent?badge('b-good','보냄'):badge('b-muted','대기'))+'</div>'+
+  (rows.length?(()=>{const pa=(S.meta.tools||{}).praise_app;const pts=rows.filter(r=>isPrimarySession(r.x)).map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);return '<div class="panel" style="border-color:var(--brass)"><div class="bar"><b>오늘 포인트 (칭찬모아 지급용)</b><span class="note">세션 기록에서 자동 계산 · 같은 날 중복 기록은 마지막 것만 · '+pts.length+'명 · 합계 '+pts.reduce((n,x)=>n+x.d.total,0)+'P</span><span class="sp"></span><button class="btn s" data-act="copyPoints" data-date="'+date+'" data-loc="'+loc+'">포인트 목록 복사</button>'+(pa?'<a class="btn s b" href="'+h(pa)+'" target="_blank" rel="noopener">칭찬모아 열기 ↗</a>':'')+'</div>'+(pts.length?'<div class="tw"><table class="t" style="font-size:13px"><tbody>'+pts.map(x=>'<tr><td style="white-space:nowrap"><b>'+h(x.r.s.name)+'</b></td><td class="note">'+h(pointsText(x.d))+'</td><td style="text-align:right;white-space:nowrap"><b>'+x.d.total+'P</b></td></tr>').join('')+'</tbody></table></div>':'<p class="note" style="margin:6px 0 0">오늘 포인트가 생긴 학생이 없습니다.</p>')+'<p class="note" style="margin:6px 0 0">칭찬모아는 외부 연동(API)이 없어 자동 지급은 되지 않습니다. 목록을 보고 칭찬모아에서 학생·기준을 골라 지급하세요. 포인트 규칙은 설정에서 바꿉니다.</p></div>';})():'')+
+  (rows.length?rows.map(r=>'<div class="panel" id="np_'+r.x.id+'"'+(q.focus===r.x.id?' style="border-color:var(--brass)"':'')+'><div class="bar" style="margin-bottom:8px"><b style="font-size:16px"><a href="#/student/'+r.s.id+'" style="color:inherit;text-decoration:none">'+h(r.s.name)+'</a></b><span class="note">'+h(nameOf(S.locations,r.x.location_id))+' · '+h(nameOf(S.teachers,r.x.teacher_id))+' · '+monthSeq(r.x)+'회차</span><span class="sp"></span>'+(()=>{const li=lateInfo(r.x);const prim=isPrimarySession(r.x);return (prim?'':badge('b-muted','이전 기록 · 중복 (포인트 제외)')+' <button class="btn s d" data-act="delSession" data-id="'+r.x.id+'">이 기록 삭제</button> ')+(li?badge('b-warn','마감 후 입력 '+(li.nextDay?'(다음날) ':'')+li.time)+' ':'')+(r.x.corrected&&!r.x.sent?badge('b-warn','정정 · 다시 보내기')+' ':'')+(prim?'<button class="btn s" data-act="redoSession" data-sid="'+r.s.id+'" data-date="'+date+'" title="이 날짜 기록을 지우고 다시 입력 (진도 되돌림)">기록 수정</button> ':'')+(r.x.sent?badge('b-good','보냄'):badge('b-muted','대기'));})()+'</div>'+
     '<textarea id="nt_cm_'+r.x.id+'" style="min-height:220px">'+h(r.x.daily_comment)+'</textarea><input type="hidden" id="nt_hw_'+r.x.id+'" value="'+h(r.x.homework_notice)+'">'+
     '<div class="bar" style="margin-top:8px"><button class="btn p s" data-act="saveNotice" data-id="'+r.x.id+'">수정 저장</button><button class="btn s" data-act="copyComment" data-id="'+r.x.id+'">복사</button><button class="btn s p" data-act="shareComment" data-id="'+r.x.id+'">공유</button><button class="btn s" data-act="smsComment" data-id="'+r.x.id+'">문자</button><button class="btn s" data-act="regenNotice" data-id="'+r.x.id+'">다시 생성</button><label class="note" style="margin-left:auto"><input type="checkbox" data-act="toggleSent" data-id="'+r.x.id+'"'+(r.x.sent?' checked':'')+'> 보냄</label></div></div>').join(''):
   '<div class="empty">'+fmtDateK(date)+'에 입력된 세션이 없습니다. Teacher Home에서 세션을 입력하면 알림장이 자동으로 생깁니다.</div>');
@@ -1958,7 +2196,16 @@ function viewDashboard(q){
   return '<div class="bar"><div><h1>주간 대시보드</h1><p class="sub" style="margin:0">'+h(ws)+' ~ '+h(addDays(ws,6))+' · 평소 범위 = 직전 4주 중앙값 · 범위를 벗어난 칸만 색이 붙습니다.</p></div><span class="sp"></span><label class="f">주<input type="date" class="hq" data-k="week" value="'+ws+'"></label><a class="btn" href="#/dashboard?week='+addDays(ws,-7)+'">◀ 지난주</a><a class="btn" href="#/dashboard?week='+addDays(ws,7)+'">다음주 ▶</a></div>'+
   (flagsAll.length?'<div class="ban">이번 주 봐야 할 것: '+flagsAll.map(h).join(' · ')+'</div>':'<div class="panel" style="border-color:var(--good)"><span class="badge b-good">평소 범위</span> <span class="note">숫자가 모두 평소 범위 안입니다. 승인함만 확인하면 됩니다.</span></div>')+
   '<div class="panel tw"><table class="t"><thead><tr><th></th>'+cols.map(c=>'<th>'+h(c.name)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(([label,fn])=>'<tr><td><b>'+label+'</b></td>'+data.map(fn).join('')+'</tr>').join('')+'</tbody></table></div>'+
-  '<div class="bar"><a class="btn p" href="#/approvals">승인 대기함 '+S.approvals.filter(a=>!a.decision).length+'</a><a class="btn" href="#/alerts?f=INCOMPLETE">완료 기준 미충족</a><a class="btn" href="#/alerts">예외 처리함</a><a class="btn" href="#/reports">월간 리포트</a></div>';
+  '<div class="bar"><a class="btn p" href="#/approvals">승인 대기함 '+S.approvals.filter(a=>!a.decision).length+'</a><a class="btn" href="#/alerts?f=INCOMPLETE">완료 기준 미충족</a><a class="btn" href="#/alerts">예외 처리함</a><a class="btn" href="#/reports">월간 리포트</a></div>'+
+  directorLists(q.loc||'');
+}
+// 원장 리스트: 숙제 미제출 누적 · 테스트 재검사 시기
+function directorLists(loc){
+  const RD=S.rules.HW_MISS_DIRECTOR||{count:3,days:30};const hw=hwMissReport(num(RD.days,30),loc);const due=testDueReport(loc);const RT=S.rules.TEST_DUE||{};
+  const hwRows=hw.map(r=>'<tr><td><a href="#/student/'+r.s.id+'"><b>'+h(r.s.name)+'</b></a><div class="note">'+h(nameOf(S.locations,r.s.location_id))+' · '+h(nameOf(S.teachers,r.s.homeroom_teacher_id))+'</div></td><td><b style="color:var(--bad)">'+r.miss.length+'회</b></td><td class="note">'+r.miss.slice(-5).map(m=>h(m.date.slice(5))+' '+h(m.book)).join(' · ')+(r.miss.length>5?' …':'')+'</td><td>'+(r.alert?(r.alert.status==='REPORTED'?badge('b-brass','보고됨'):badge('b-warn','담임 처리 중')):badge('b-muted','규칙 평가 전'))+'</td></tr>').join('');
+  const dueRows=due.map(d=>'<tr><td><a href="#/student/'+d.s.id+'"><b>'+h(d.s.name)+'</b></a><div class="note">'+h(nameOf(S.locations,d.s.location_id))+' · '+h(nameOf(S.teachers,d.s.homeroom_teacher_id))+'</div></td><td>'+badge(d.kind==='RTP'?'b-brass':'b-info',d.kind)+'</td><td>'+(d.last?h(d.last)+' <span class="note">('+d.monthsAgo+'개월 전)</span>':'<span class="note">기록 없음 · 등원 '+h(d.s.enrolled_at||'')+'</span>')+'</td></tr>').join('');
+  return '<div class="grid g2"><div class="panel"><h2>숙제 미제출 '+num(RD.count,3)+'회 이상 <span class="note">최근 '+num(RD.days,30)+'일 · '+hw.length+'명</span></h2>'+(hw.length?'<div class="tw"><table class="t"><thead><tr><th>학생</th><th>횟수</th><th>최근 미제출</th><th>상태</th></tr></thead><tbody>'+hwRows+'</tbody></table></div>':'<p class="note">해당 학생 없음.</p>')+'<p class="note" style="margin-top:8px">기준은 설정 → 판정·예외 기준(HW_MISS_DIRECTOR)에서 바꿉니다. 담임에게는 "숙제 미제출 누적 (원장 보고)" 예외로 올라가고, 담임이 통화 후 보고하면 결정함에 들어옵니다.</p></div>'+
+  '<div class="panel"><h2>RTP · NELT 재검사 시기 <span class="note">RTP '+num(RT.rtp_months,3)+'개월 · NELT '+num(RT.nelt_months,3)+'개월 · '+due.length+'건</span></h2>'+(due.length?'<div class="tw" style="max-height:320px;overflow:auto"><table class="t"><thead><tr><th>학생</th><th>테스트</th><th>마지막 테스트</th></tr></thead><tbody>'+dueRows+'</tbody></table></div>':'<p class="note">재검사 시기가 된 학생이 없습니다.</p>')+'<p class="note" style="margin-top:8px">담임의 오늘 화면과 할 일에 같은 알림이 뜹니다. 학생 상세 → 평가 기록에 결과를 입력하면 자동으로 해결됩니다. RTP는 AR 기록도 같은 레벨테스트로 봅니다.</p></div></div>';
 }
 
 
@@ -2133,7 +2380,7 @@ const ACT={
       const i=row.dataset.i;const sel=row.querySelector('.ipTrack');if(!sel)continue;const tid=sel.value;
       if(seen.has(tid)){toast('같은 교재가 두 번 선택되어 있습니다.');return;}seen.add(tid);
       const stEl=document.querySelector('input[name="st_ip_'+i+'"]:checked')||document.querySelector('input[name="st_ip_'+i+'"][type="hidden"]');let st=stEl?stEl.value:'COMPLETED';let unit_id=null,reason='';
-      if(st==='OTHER'){unit_id=$('#ipUnit_'+i).value;reason=$('#ipReason_'+i).value.trim();if(!reason){toast('다른 Unit을 진행한 이유를 입력하세요.');$('#ipReason_'+i).focus();return;}st='COMPLETED';}
+      const usel=$('#ipUnit_'+i);if(usel&&usel.value&&usel.dataset.nx&&usel.value!==usel.dataset.nx){unit_id=usel.value;reason=($('#ipReason_'+i)&&$('#ipReason_'+i).value.trim())||'세션 입력에서 직접 지정';}
       const rb=$('#rb_acc_'+i)?{acc:$('#rb_acc_'+i).value===''?null:num($('#rb_acc_'+i).value),idea:$('#rb_idea_'+i).value===''?null:num($('#rb_idea_'+i).value),expr:$('#rb_expr_'+i).value===''?null:num($('#rb_expr_'+i).value)}:null;
       const ev=$('#ev_n_'+i)?{sentences:$('#ev_n_'+i).value===''?null:num($('#ev_n_'+i).value),errors:$('#ev_e_'+i).value===''?null:num($('#ev_e_'+i).value),ideas:[...document.querySelectorAll('.idea[data-i="'+i+'"]:checked')].map(x=>x.value),own:!!($('#ev_own_'+i)&&$('#ev_own_'+i).checked)}:null;
       acts.push({activity_type:'INDIVIDUAL_PROGRESS',track_id:tid,status:st,unit_id,override_reason:reason,lesson_note:$('#ln_'+i)?$('#ln_'+i).value.trim():'',rubric:rb,evidence:ev,work:$('#wk_'+i)?$('#wk_'+i).value.trim():'',_i:i});
@@ -2145,6 +2392,13 @@ const ACT={
     attachPhotos(r.session,acts);
     $('#app').innerHTML=sessionConfirm(s,r);hydratePhotos();window.scrollTo(0,0);toast('저장됨 · State 갱신 · 알림장 생성');
   },
+  ipUnitAdd(el){const b=byId(S.books,el.dataset.book);if(!b)return;const us=unitsOf(b);const n=us.length+1;const label=b.unit_label||'Unit';for(const u of us)u.is_final=false;b.units.push({id:b.id+'_u'+n,seq_no:n,unit_name:label+' '+n,is_final:true});persist();
+    const sel=$('#ipUnit_'+el.dataset.i);if(sel){sel.innerHTML=opt(unitsOf(b),b.id+'_u'+n,u=>u.unit_name);const r=$('#ipReason_'+el.dataset.i);if(r)r.hidden=sel.value===sel.dataset.nx;}toast(b.book_name+' · '+label+' '+n+' 추가됨');},
+  async redoSession(el){const sid=el.dataset.sid,date=el.dataset.date;const s=studentOf(sid);if(!s)return;const list=sessionsOnDay(sid,date);if(!list.length){nav('session',sid,{date});return;}
+    const sentN=list.filter(x=>x.sent).length;if(!await ask(s.name+' · '+fmtDateK(date)+' 기록 '+list.length+'건을 지우고 다시 입력합니다. 진도 상태는 기록 전으로 되돌립니다.'+(sentN?' 이미 보낸 알림장이 있어 새 알림장에 정정 표시가 붙습니다.':'')+' 계속할까요?'))return;
+    const D=redoDay(sid,date);toast('기록 '+(D?D.removed:0)+'건 삭제 · 진도 되돌림'+(D&&D.notes.length?' (일부 제외)':''));nav('session',sid,{date,redo:'1'});},
+  async delSession(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const s=studentOf(x.student_id);if(!await ask((s?s.name:'')+' · '+fmtDateK(x.session_date)+' 기록을 삭제합니다. 이 기록이 올린 진도는 되돌리고'+(x.sent?', 보낸 알림장은 그대로 둡니다':'')+'. 계속할까요?'))return;
+    const r=deleteSession(x.id,'삭제');toast('기록 삭제됨'+(r&&r.notes.length?' · 되돌리지 못함: '+r.notes.join(' / '):' · 진도 되돌림'));render();},
   saveNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id),cm=$('#nt_cm_'+x.id);if(hw)x.homework_notice=hw.value.trim();if(cm)x.daily_comment=cm.value.trim();persist();toast('알림장 저장됨');},
   regenNotice(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const hw=$('#nt_hw_'+x.id);if(hw)x.homework_notice=hw.value.trim();x.daily_comment=genComment(x);persist();const cm=$('#nt_cm_'+x.id);if(cm)cm.value=x.daily_comment;toast('템플릿으로 다시 생성됨');},
   copyComment(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;copyText(noticeTextOf(x));},
@@ -2154,7 +2408,7 @@ const ACT={
   smsComment(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;const s=studentOf(x.student_id);const ph=(s&&s.guardian_phone||'').replace(/[^0-9+]/g,'');if(!ph){toast('학부모 연락처가 없습니다. 학생 정보에서 입력하세요.');return;}const text=noticeTextOf(x);const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||'');location.href='sms:'+ph+(ios?'&':'?')+'body='+encodeURIComponent(text);x.sent=true;persist();setTimeout(render,500);},
   toggleSent(el){const x=byId(S.sessions,el.dataset.id);if(!x)return;x.sent=!!el.checked;persist();toast(x.sent?'보냄 처리':'보냄 해제');},
   copyAll(el){const rows=noticeRows(el.dataset.date,el.dataset.loc);if(!rows.length){toast('복사할 알림장이 없습니다.');return;}copyText(rows.map(r=>noticeTextOf(r.x)).join('\n\n────────────\n\n'));},
-  copyPoints(el){const rows=noticeRows(el.dataset.date,el.dataset.loc).map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);if(!rows.length){toast('복사할 포인트가 없습니다.');return;}copyText(fmtDateK(el.dataset.date)+' 포인트\n'+rows.map(x=>x.r.s.name+' '+x.d.total+'P — '+pointsText(x.d)).join('\n'));},
+  copyPoints(el){const rows=noticeRows(el.dataset.date,el.dataset.loc).filter(r=>isPrimarySession(r.x)).map(r=>({r,d:sessionPoints(r.x)})).filter(x=>x.d.total>0);if(!rows.length){toast('복사할 포인트가 없습니다.');return;}copyText(fmtDateK(el.dataset.date)+' 포인트\n'+rows.map(x=>x.r.s.name+' '+x.d.total+'P — '+pointsText(x.d)).join('\n'));},
   markAllSent(el){for(const r of noticeRows(el.dataset.date,el.dataset.loc))r.x.sent=true;persist();toast('전체 보냄 처리');render();},
   print(){window.print();},
   navMore(){$('#nav').classList.toggle('open');renderNav();},
@@ -2312,17 +2566,23 @@ const ACT={
   cloudSetup(){const url=$('#cl_url').value.trim().replace(/\/$/,''),key=$('#cl_key').value.trim();if(!/^https:\/\/.+\.supabase\.co$/.test(url)){toast('Project URL 형식: https://xxxx.supabase.co');return;}if(key.length<20){toast('anon key를 붙여넣으세요.');return;}const c=cloudCfg();if(c.url!==url){delete c.token;delete c.refresh;}c.url=url;c.key=key;cloudSave(c);toast('저장됨 · 학원 계정으로 로그인하세요');render();},
   async cloudLogin(){const email=$('#cl_email').value.trim(),pass=$('#cl_pass').value;const m=$('#cl_msg');if(!email||!pass){if(m)m.textContent='이메일과 비밀번호를 입력하세요.';return;}if(m)m.textContent='연결 중…';try{await cloudLogin(email,pass);toast('공유 저장소 연결됨');await cloudBoot();render();}catch(e){if(m)m.textContent=e.message;}},
   async cloudPushNow(){if(!await ask('이 기기의 데이터로 공유 저장소를 덮어씁니다. 다른 기기에서 입력한 내용이 있으면 사라집니다. 계속할까요?'))return;const ok=await cloudPush(true);toast(ok?'업로드 완료':'업로드 실패');render();},
-  async cloudPullNow(){if(!await ask('공유 저장소의 데이터로 이 기기를 덮어씁니다. 계속할까요?'))return;const cur=await cloudPull().catch(()=>null);if(!cur||!cur.data){toast('공유 저장소에 데이터가 없습니다.');return;}const o=migrate(cur.data);if(!o){toast('데이터 형식이 다릅니다.');return;}S=o;for(const k of ['issues','stock'])if(!Array.isArray(S[k]))S[k]=[];CLOUD_VER=cur.version;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}cloudSetStatus('동기화됨 · v'+CLOUD_VER,'b-good');toast('내려받기 완료');render();},
+  async cloudPullNow(){if(!await ask('공유 저장소의 데이터로 이 기기를 덮어씁니다. 계속할까요?'))return;const cur=await cloudPull().catch(()=>null);if(!cur||!cur.data){toast('공유 저장소에 데이터가 없습니다.');return;}const o=migrate(cur.data);if(!o){toast('데이터 형식이 다릅니다.');return;}S=o;for(const k of ['issues','stock'])if(!Array.isArray(S[k]))S[k]=[];CLOUD_VER=cur.version;cacheState();cloudSetStatus('동기화됨 · v'+CLOUD_VER,'b-good');toast('내려받기 완료');render();},
   async cloudSnapList(){const box=$('#snapList');if(!box)return;box.innerHTML='<p class="note">불러오는 중…</p>';const rows=await cloudSnapshots().catch(()=>[]);box.innerHTML=rows.length?'<div class="tw" style="margin-top:8px"><table class="t" style="font-size:13px"><thead><tr><th>날짜</th><th>버전</th><th>저장 시각</th><th></th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+h(x.day)+'</td><td>v'+h(x.version)+'</td><td class="note">'+h((x.saved_at||'').replace('T',' ').slice(0,16))+'</td><td><button class="btn s" data-act="cloudSnapRestore" data-day="'+h(x.day)+'">이 날짜로 되돌리기</button></td></tr>').join('')+'</tbody></table></div><p class="note">매일 첫 저장 때 자동으로 그날의 사본이 남습니다 (30일 보관). 되돌리면 현재 데이터를 그 사본으로 덮어쓰고 공유 저장소에도 올립니다.</p>':'<p class="note">아직 백업이 없습니다. 오늘 첫 저장 때 생깁니다.</p>';},
   async cloudSnapRestore(el){const day=el.dataset.day;if(!await ask(day+' 사본으로 되돌립니다. 그 이후 입력은 사라집니다. (되돌리기 직전 상태도 오늘 사본으로 한 번 더 남깁니다) 계속할까요?'))return;
-    try{const c=cloudCfg();c.snap_day='';cloudSave(c);await cloudSnapshot();const r=await cloudFetch('/rest/v1/epl_snapshot?day=eq.'+day+'&select=data');const rows=r.ok?await r.json():[];if(!rows.length){toast('사본을 찾지 못했습니다.');return;}const o=migrate(rows[0].data);if(!o){toast('데이터 형식이 다릅니다.');return;}S=o;for(const k of ['issues','stock'])if(!Array.isArray(S[k]))S[k]=[];try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}await cloudPush(true);toast(day+' 사본으로 복구됨');render();}catch(e){toast('복구 실패: '+e.message);}},
+    try{const c=cloudCfg();c.snap_day='';cloudSave(c);await cloudSnapshot();const r=await cloudFetch('/rest/v1/epl_snapshot?day=eq.'+day+'&select=data');const rows=r.ok?await r.json():[];if(!rows.length){toast('사본을 찾지 못했습니다.');return;}const o=migrate(rows[0].data);if(!o){toast('데이터 형식이 다릅니다.');return;}S=o;for(const k of ['issues','stock'])if(!Array.isArray(S[k]))S[k]=[];cacheState();await cloudPush(true);toast(day+' 사본으로 복구됨');render();}catch(e){toast('복구 실패: '+e.message);}},
   async cloudDisconnect(){if(!await ask('이 기기에서 공유 저장소 연결을 끊습니다. 데이터는 이 브라우저에만 남습니다.'))return;try{localStorage.removeItem(CLOUD_KEY);}catch(e){}CLOUD_VER=0;cloudSetStatus('','b-muted');toast('연결 끊김');nav('home');},
   bulkNotion(){$('#bulkBox').value=NOTION_ROSTER_2026_10_16;const r=parseBulk(NOTION_ROSTER_2026_10_16);$('#bulkOut').innerHTML=bulkPreviewHtml(r);toast('노션 명단을 채웠습니다. 미리보기를 확인하고 등록을 누르세요.');$('#bulkPanel').scrollIntoView({block:'start'});},
   bulkTemplate(){copyText(BULK_COLS.join('\t'));},
+  progressPreview(){const box=$('#progressBox');if(!box||!box.value.trim()){toast('시트 내용을 붙여 넣으세요.');return;}PROGRESS_PREVIEW=parseProgressSheet(box.value);$('#progressOut').innerHTML=progressPreviewHtml(PROGRESS_PREVIEW);toast('미리보기 · 학생 '+PROGRESS_PREVIEW.rows.filter(r=>r.student).length+'명 매칭');$('#progressOut').scrollIntoView({block:'start'});},
+  async progressApply(){const P=PROGRESS_PREVIEW;if(!P){toast('먼저 미리보기를 누르세요.');return;}const map={};for(const el of document.querySelectorAll('.ps_map'))map[el.dataset.key]=el.value;const chap={};for(const el of document.querySelectorAll('.ps_chap')){const v=num(el.value,0);if(v>0)chap[el.dataset.key]=v;}
+    const n=P.rows.filter(r=>r.student).length;if(!await ask('학생 '+n+'명의 교재·Unit을 시트대로 바꿉니다. 바뀐 내용은 학생 차트에 "진도" 기록으로 남고, 되돌리려면 교재 설정에서 고칩니다. 계속할까요?'))return;
+    const st=applyProgressSheet(P,{map,chap,teacher:!!($('#ps_teacher')&&$('#ps_teacher').checked)});PROGRESS_PREVIEW=null;
+    toast('반영 완료 · 학생 '+st.students+'명 · Unit '+st.unit+' · 교재 교체 '+st.switched+' · 새 교재 '+st.newBooks+' · 메모 '+st.notes);render();setTimeout(()=>{const el=$('#progressPanel');if(el)el.scrollIntoView({block:'start'});},50);},
+  progressTemplate(){copyText(progressSheetExport(''));toast('현재 진도 시트를 복사했습니다 — 구글 시트에 붙여 넣으세요.');},
   addLocation(){const name=$('#loc_name').value.trim();if(!name){toast('지점 이름을 입력하세요.');$('#loc_name').focus();return;}if(S.locations.some(l=>l.name.trim()===name)){toast('같은 이름의 지점이 있습니다.');return;}
-    const base=byId(S.locations,$('#loc_copy').value)||S.locations[0];const l={id:uid('loc'),name,session_minutes:Math.max(10,num($('#loc_min').value,base.session_minutes||80)),flow_order:(base.flow_order||SLOTS).slice(),slot_start:base.slot_start||'14:00',slot_end:base.slot_end||'18:30',slot_min:base.slot_min||15,lead_min:base.lead_min!=null?base.lead_min:45};
+    const base=byId(S.locations,$('#loc_copy').value)||S.locations[0];const l={id:uid('loc'),name,session_minutes:Math.max(10,num($('#loc_min').value,base.session_minutes||80)),flow_order:(base.flow_order||SLOTS).slice(),slot_start:base.slot_start||'14:00',slot_end:base.slot_end||'18:30',slot_min:base.slot_min||15,lead_min:base.lead_min!=null?base.lead_min:45,max_per_hour:base.max_per_hour||8,entry_deadline:base.entry_deadline||DEFAULT_ENTRY_DEADLINE};
     S.locations.push(l);persist();toast(name+' 추가됨');render();},
-  saveLocations(){for(const el of document.querySelectorAll('.locname')){const l=locOf(el.dataset.id);if(!l)continue;const v=el.value.trim();if(!v){toast('지점 이름은 비울 수 없습니다.');return;}l.name=v;}for(const el of document.querySelectorAll('.locmin')){const l=locOf(el.dataset.id);if(l)l.session_minutes=Math.max(10,num(el.value,l.session_minutes||80));}persist();toast('지점 저장');render();},
+  saveLocations(){for(const el of document.querySelectorAll('.locname')){const l=locOf(el.dataset.id);if(!l)continue;const v=el.value.trim();if(!v){toast('지점 이름은 비울 수 없습니다.');return;}l.name=v;}for(const el of document.querySelectorAll('.locmin')){const l=locOf(el.dataset.id);if(l)l.session_minutes=Math.max(10,num(el.value,l.session_minutes||80));}for(const el of document.querySelectorAll('.locdl')){const l=locOf(el.dataset.id);if(l&&/^\d{2}:\d{2}$/.test(el.value))l.entry_deadline=el.value;}persist();toast('지점 저장');render();},
   async delLocation(el){const l=locOf(el.dataset.id);if(!l)return;if(S.locations.length<=1){toast('지점은 최소 1개 필요합니다.');return;}if(S.students.some(x=>x.location_id===l.id&&x.status!=='WITHDRAWN')||S.teachers.some(t=>t.location_id===l.id)){toast('학생이나 강사가 배정된 지점은 삭제할 수 없습니다.');return;}if(!await ask(l.name+' 지점을 삭제할까요?'))return;S.locations=S.locations.filter(x=>x.id!==l.id);for(const x of S.students)if(x.location_id===l.id)x.location_id=S.locations[0].id;persist();toast('삭제됨');render();},
   issue(el){const k=el.dataset.sid+'_'+el.dataset.book;const q=$('#iq_'+k)?$('#iq_'+k).value:1,p=$('#ip_'+k)?$('#ip_'+k).value:'',d=$('#id_'+k)?$('#id_'+k).value:todayISO();const s=studentOf(el.dataset.sid);const it=issueBook(el.dataset.sid,el.dataset.book,myId(s?s.homeroom_teacher_id:null),el.dataset.st,q,p,d,'');if(!it)return;persist();toast((s?s.name:'')+' · '+ISSUE_ST[it.status]);render();},
   async issueAllExisting(el){const needs=issueNeeds(el.dataset.loc||'').filter(x=>!el.dataset.tch||x.s.homeroom_teacher_id===el.dataset.tch);if(!needs.length)return;if(!await ask(needs.length+'건을 "이미 지급됨"으로 표시합니다. 재고는 차감하지 않습니다. 계속할까요?'))return;
@@ -2354,13 +2614,13 @@ const ACT={
 };
 
 document.addEventListener('submit',e=>{if(e.target&&e.target.id==='loginForm'){e.preventDefault();ACT.login();}if(e.target&&e.target.id==='cloudLoginForm'){e.preventDefault();ACT.cloudLogin();}});
-document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(!fn)return;if(el.type!=='checkbox')e.preventDefault();try{const r=fn(el);if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);toast('오류: '+err.message);});}catch(err){console.error(err);toast('오류: '+err.message);}});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;if(!S)return;const fn=ACT[el.dataset.act];if(!fn)return;if(el.type!=='checkbox')e.preventDefault();try{const r=fn(el);if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);toast('오류: '+err.message);});}catch(err){console.error(err);toast('오류: '+err.message);}});
 document.addEventListener('change',e=>{const el=e.target;
   if(el.classList.contains('hq')){const r=route();r.q[el.dataset.k]=el.value;nav(r.name,r.id,r.q);return;}
   if(el.classList.contains('hwTrack')){const row=el.closest('.hwrow');const box=$('#hwRows');if(!row||!box)return;const hc=activeTracks(box.dataset.sid).filter(x=>x.next_unit_id||x.category==='VOCAB');const t=el.value==='__custom'?null:byId(S.tracks,el.value);row.outerHTML=hwRow(row.dataset.i,t,hc,'');if(!t){const f=$('#hwName_'+row.dataset.i);if(f)f.focus();}return;}
   if(el.classList.contains('ipTrack')){const t=byId(S.tracks,el.value);const body=$('#ipBody_'+el.dataset.i);if(t&&body)body.innerHTML=ipBody(el.dataset.i,t);return;}
   if(el.classList.contains('vtU')){const r=$('#vtR_'+el.dataset.t);if(r){r.hidden=el.value!=='__review';if(!r.hidden)r.focus();}return;}
-  if(el.classList.contains('ipst')){const box=$('#ov_'+el.dataset.i);if(box)box.hidden=el.value!=='OTHER';return;}
+  if(el.classList.contains('ipUnitSel')){const r=$('#ipReason_'+el.dataset.i);if(r)r.hidden=el.value===el.dataset.nx;return;}
   if(el.classList.contains('wph')){const f=el.files&&el.files[0];if(!f)return;const key=el.dataset.i!=null?el.dataset.i:el.dataset.id;shrinkImage(f,1200).then(b=>{PENDING_PHOTOS[key]=b;const pv=$('#wph_prev_'+key);if(pv)pv.innerHTML='<img src="'+URL.createObjectURL(b)+'" class="wphoto" alt="미리보기"> 저장하면 기록에 붙습니다';});return;}
   if(el.classList.contains('tf_book')){const b=byId(S.books,el.value);const row=el.closest('tr');row.querySelector('.tf_unit').innerHTML=b?nextUnitOptions(b,firstUnit(b)?firstUnit(b).id:''):'';const m=row.querySelector('.tf_mode');if(b){m.value=defaultMode(b.category);m.disabled=b.category==='VOCAB';}const rd=row.querySelector('input[name="defTrack"]');if(rd)rd.disabled=!b||m.value!=='ACADEMY';return;}
   if(el.classList.contains('tf_mode')){const row=el.closest('tr');const rd=row.querySelector('input[name="defTrack"]');if(rd){rd.disabled=el.value!=='ACADEMY';if(rd.disabled)rd.checked=false;}return;}
@@ -2400,11 +2660,589 @@ function render(){
   window.scrollTo(0,0);
 }
 function fillMissingNotices(){let n=0;for(const x of S.sessions){if(!x.daily_comment){if(!x.homework_notice)x.homework_notice=genHomeworkNotice(x);x.daily_comment=genComment(x);n++;}}if(n)persist();}
-S=loadState();fillMissingNotices();applyTheme();cloudBoot();
-window.addEventListener('hashchange',render);window.addEventListener('beforeunload',e=>{if(cloudAuthed()&&(CLOUD_DIRTY||dirtyGet())){cloudPush(false);e.preventDefault();e.returnValue='아직 서버에 저장되지 않은 기록이 있습니다.';}});
-if(!location.hash)location.hash='#/home';
-render();
+// 부팅: 이 기기 캐시(localStorage → IndexedDB) → 화면 → 공유 저장소 동기화. 확장 모듈은 'epl:ready' 이후에 붙는다.
+async function boot(){
+  S=await loadStateAsync();fillMissingNotices();applyTheme();cloudBoot();
+  window.addEventListener('hashchange',render);window.addEventListener('beforeunload',e=>{if(cloudAuthed()&&(CLOUD_DIRTY||dirtyGet())){cloudPush(false);e.preventDefault();e.returnValue='아직 서버에 저장되지 않은 기록이 있습니다.';}});
+  if(!location.hash)location.hash='#/home';
+  render();document.dispatchEvent(new CustomEvent('epl:ready'));
+  setTimeout(()=>{if(dailyRuleCheck())render();},8000);
+}
+boot();
 
+</script>
+<script>
+/* ============================================================================
+   EPL OS · GROWTH ARCHIVE 모듈  v0.1  (PHASE 1 데이터 연동 + PHASE 2 교사용 기록 시스템)
+   READ → THINK → WRITE → REFLECT → GROW → PUBLISH
+
+   index.html 맨 아래, 기존 OS 스크립트 다음의 두 번째 <script> 블록으로 들어 있다 (파일 하나로 배포).
+   OS의 전역(S·persist·cloud*·ROUTES·ACT·NAV·헬퍼)을 그대로 쓰고, 기존 코드는 수정하지 않는다.
+   - 상태(S)·저장(persist)·공유 저장소(cloud*)·라우터(ROUTES/ACT/NAV)·헬퍼(h,$,badge…)는
+     index.html 것을 그대로 쓴다. 중복 DB·별도 로그인 없음.
+   - 새 컬렉션 (epl_state.data 안에 저장, 모든 기기 동기화)
+       archive_readings  독서 기록      archive_writings  라이팅 작품(헤더)
+       archive_versions  작품 버전(ORIGINAL·REVISED·FINAL)
+       archive_files     파일 메타      archive_log       승인·공개·삭제 이력
+   - 파일 본체(사진·PDF): 기본은 공유 저장소 epl_state 행(설정 불필요), 전용 버킷 'epl-archive'가 있으면 자동 사용
+       (공유 저장소 연결 전에는 이 기기 IndexedDB에 보관했다가 연결되면 자동 업로드)
+   - 세션 입력과 자동 연결: 원서 제목 → 독서 기록, 라이팅 사진·루브릭·작품 제목 → 작품
+     (id를 세션 기준으로 결정해 어느 기기에서 만들어도 같은 기록 하나로 합쳐진다)
+   ============================================================================ */
+'use strict';
+(function(){
+if(typeof ROUTES==='undefined'||typeof ACT==='undefined'){console.error('Growth Archive 모듈은 OS 스크립트 뒤에 있어야 합니다.');return;}
+
+// ===== 0. 상수 ================================================================
+const GA_BUCKET='epl-archive';
+const GA_KEYS=['archive_readings','archive_writings','archive_versions','archive_files','archive_log'];
+const GA_READ_ST={READING:'읽는 중',DONE:'완독',PAUSED:'잠시 멈춤'};
+const GA_READ_CLS={READING:'b-brass',DONE:'b-good',PAUSED:'b-muted'};
+const GA_W_ST={ORIGINAL:'원본만',REVIEWED:'첨삭 완료',FINAL:'최종본 완성'};
+const GA_W_CLS={ORIGINAL:'b-warn',REVIEWED:'b-info',FINAL:'b-good'};
+const GA_VKIND={ORIGINAL:'학생 원본',REVISED:'교사 첨삭본',FINAL:'최종본'};
+const GA_VHINT={ORIGINAL:'학생이 쓴 그대로. 수정하지 않고 보관합니다.',REVISED:'첨삭한 종이를 찍거나 고쳐 쓴 글을 올립니다.',FINAL:'학생이 다시 쓴 완성본. 포트폴리오·작품집에 들어갑니다.'};
+const GA_APPR={NONE:'비공개',PENDING:'공개 승인 대기',APPROVED:'학부모 공개',REJECTED:'보류'};
+const GA_APPR_CLS={NONE:'b-muted',PENDING:'b-warn',APPROVED:'b-good',REJECTED:'b-bad'};
+const GA_DEFAULT_TAGS=['모험','동물','우정','가족','학교','유머','판타지','과학','역사','스포츠','미스터리','자연','요리','예술'];
+const GA_DEFAULT_PROJECTS=['Book Writing','Journal','Story','Opinion','Letter','MY FAVORITE PERSON','교재 작문'];
+const GA_SQL=`-- (선택) Growth Archive 전용 파일 버킷 — 파일이 많아지면 Supabase SQL Editor에서 1회 실행
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('epl-archive','epl-archive',false,26214400,array['image/jpeg','image/png','image/webp','application/pdf'])
+on conflict (id) do update set public=false, file_size_limit=excluded.file_size_limit, allowed_mime_types=excluded.allowed_mime_types;
+drop policy if exists "epl_archive_rw" on storage.objects;
+create policy "epl_archive_rw" on storage.objects for all to authenticated
+  using (bucket_id='epl-archive') with check (bucket_id='epl-archive');`;
+const GA_MAX_FILE=25*1024*1024;
+const nowISO=()=>new Date().toISOString();
+const gaId=s=>String(s||'').replace(/[^0-9A-Za-z_-]/g,'_');
+const gaKo=(d,i)=>d?fmtDateK(d):'';
+const gaYm=()=>todayISO().slice(0,7);
+const gaYmK=ym=>ym?Number(ym.slice(0,4))+'년 '+Number(ym.slice(5,7))+'월':'';
+
+// ===== 1. 상태 보장 · 마이그레이션 ===========================================
+function gaEnsure(st){
+  st=st||S;if(!st||typeof st!=='object')return st;
+  for(const k of GA_KEYS)if(!Array.isArray(st[k]))st[k]=[];
+  st.meta=st.meta||{};const a=st.meta.archive=st.meta.archive||{};
+  if(!Array.isArray(a.projects)||!a.projects.length)a.projects=GA_DEFAULT_PROJECTS.slice();
+  if(!Array.isArray(a.tags)||!a.tags.length)a.tags=GA_DEFAULT_TAGS.slice();
+  if(!a.bucket)a.bucket=GA_BUCKET;
+  if(a.version==null)a.version=1;
+  return st;
+}
+function gaAcademy(){return gaId((S.meta&&S.meta.academy)||'EPL')||'EPL';}
+function gaMeta(){gaEnsure(S);return S.meta.archive;}
+function gaLog(type,target_type,target_id,student_id,note){
+  S.archive_log.push({id:uid('al'),type,target_type,target_id,student_id:student_id||null,by:myId(null),by_name:(currentUser()||{}).name||'',at:nowISO(),note:note||''});
+  if(S.archive_log.length>3000)S.archive_log.splice(0,S.archive_log.length-3000);
+}
+
+// ===== 2. 조회 헬퍼 ===========================================================
+const gaReadings=sid=>S.archive_readings.filter(r=>r.student_id===sid).sort((a,b)=>(b.last_date||b.date||'').localeCompare(a.last_date||a.date||''));
+const gaWritings=sid=>S.archive_writings.filter(w=>w.student_id===sid).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.created_at||'').localeCompare(a.created_at||''));
+const gaVersions=wid=>S.archive_versions.filter(v=>v.writing_id===wid).sort((a,b)=>a.seq-b.seq);
+const gaFile=id=>byId(S.archive_files,id);
+const gaReading=id=>byId(S.archive_readings,id);
+const gaWriting=id=>byId(S.archive_writings,id);
+function gaVersion(wid,kind){const vs=gaVersions(wid).filter(v=>v.kind===kind);return vs[vs.length-1]||null;}
+function gaVersionEnsure(wid,kind){let v=gaVersion(wid,kind);if(v)return v;const seq={ORIGINAL:1,REVISED:2,FINAL:3}[kind]||9;v={id:'wv_'+gaId(wid)+'_'+kind.toLowerCase(),writing_id:wid,kind,seq,files:[],text:'',note:'',created_by:myId(null),created_at:nowISO()};S.archive_versions.push(v);return v;}
+function gaHasContent(v){return !!(v&&((v.files&&v.files.length)||(v.text&&v.text.trim())));}
+function gaStatusOf(w){if(gaHasContent(gaVersion(w.id,'FINAL')))return 'FINAL';if(gaHasContent(gaVersion(w.id,'REVISED'))||w.reviewed_at)return 'REVIEWED';return 'ORIGINAL';}
+function gaThumb(w){for(const k of ['FINAL','REVISED','ORIGINAL']){const v=gaVersion(w.id,k);if(!v)continue;for(const fid of (v.files||[])){const f=gaFile(fid);if(f&&f.kind==='image')return f;}}return null;}
+function gaReadingDates(r){return (r.dates||[]).slice().sort();}
+function gaMonthOf(r,ym){return gaReadingDates(r).some(d=>d.slice(0,7)===ym)||(r.done_date||'').slice(0,7)===ym||(r.date||'').slice(0,7)===ym;}
+function gaStats(sid,ym){
+  ym=ym||gaYm();const rd=gaReadings(sid),ws=gaWritings(sid);
+  const books=rd.length,booksMonth=rd.filter(r=>gaMonthOf(r,ym)).length,done=rd.filter(r=>r.status==='DONE').length;
+  const works=ws.length,worksMonth=ws.filter(w=>(w.date||'').slice(0,7)===ym).length;
+  const review=ws.filter(w=>gaStatusOf(w)==='ORIGINAL').length;
+  const featured=ws.find(w=>w.featured===ym)||null;const pendingAppr=ws.filter(w=>w.approval==='PENDING').length;const approved=ws.filter(w=>w.approval==='APPROVED').length;
+  const last=rd[0]||null;
+  return {books,booksMonth,done,works,worksMonth,review,featured,pendingAppr,approved,last};
+}
+function gaStageOf(s){try{const t=tierOf(s);return t?t.name:'';}catch(e){return '';}}
+function gaBookTitles(){const set=new Set();for(const b of (S.original_books||[]))if(b.active!==false&&b.title)set.add(b.title);for(const x of S.sessions)if(x.original_book_title)set.add(x.original_book_title);for(const r of S.archive_readings)if(r.title)set.add(r.title);return [...set].sort((a,b)=>a.localeCompare(b));}
+function gaCatalog(title){const n=normName(title);return (S.original_books||[]).find(b=>normName(b.title)===n)||null;}
+function gaCatalogUpsert(title,series,ar){
+  let b=gaCatalog(title);
+  if(!b){b={id:uid('ob'),title:String(title).trim(),series:series||'',ar_level:ar==null||ar===''?null:num(ar,null),active:true};S.original_books.push(b);return b;}
+  if(series&&!b.series)b.series=series;if((b.ar_level==null||b.ar_level==='')&&ar!=null&&ar!=='')b.ar_level=num(ar,null);return b;
+}
+
+// ===== 3. 파일 계층 ============================================================
+//  저장 위치(file.storage)
+//   'db'    : 기존 epl_state 테이블의 행(id = ga:파일id:조각번호, base64 조각) — 추가 설정 없이 바로 동작
+//   'cloud' : Supabase Storage 비공개 버킷 'epl-archive' — 버킷이 있으면 자동으로 이쪽을 쓴다 (대용량 권장)
+//   'local' : 이 기기 IndexedDB에만 있음 (공유 저장소 미연결 또는 업로드 실패 → 연결되면 자동 업로드)
+//  모든 파일은 이 기기 IndexedDB에 캐시되고, 다른 기기는 서버에서 한 번 받아 캐시한다.
+const GA_URL_CACHE=new Map();   // file id → {url,exp}  (버킷 서명 URL)
+const GA_OBJ_CACHE=new Map();   // file id → object URL (이 기기 blob)
+const GA_DB_CHUNK=600*1024;     // 행 하나에 담는 base64 길이 (~450 KB)
+const GA_DB_MAX=12*1024*1024;   // db 저장 최대 크기 (PDF)
+let GA_BUCKET_OK=null;          // null 모름 · true 버킷 있음 · false 없음(db 저장)
+function gaExt(mime){return mime==='application/pdf'?'pdf':mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg';}
+function gaKind(mime){return mime==='application/pdf'?'pdf':'image';}
+function gaSizeK(n){return n==null?'':n>1024*1024?(Math.round(n/1024/1024*10)/10)+' MB':Math.max(1,Math.round(n/1024))+' KB';}
+function gaBlobToB64(blob){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]||'');fr.onerror=()=>rej(fr.error||new Error('파일 읽기 실패'));fr.readAsDataURL(blob);});}
+function gaB64ToBlob(b64,mime){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:mime||'application/octet-stream'});}
+const gaRowPrefix=f=>'ga:'+f.id+':';
+// --- Storage 버킷 ---
+async function gaBucketPut(file,blob){
+  const r=await cloudFetch('/storage/v1/object/'+GA_BUCKET+'/'+file.path,{method:'POST',headers:{'Content-Type':file.mime,'x-upsert':'true'},body:blob});
+  if(!r.ok){let t='';try{t=await r.text();}catch(e){}const missing=r.status===404||/bucket/i.test(t);if(missing)GA_BUCKET_OK=false;const err=new Error('버킷 업로드 실패 '+r.status+(t?' · '+t.slice(0,100):''));err.bucketMissing=missing;throw err;}
+  GA_BUCKET_OK=true;return true;
+}
+async function gaSignBatch(files){
+  files=files.filter(f=>f&&f.storage==='cloud');if(!files.length||!cloudAuthed())return;
+  try{const r=await cloudFetch('/storage/v1/object/sign/'+GA_BUCKET,{method:'POST',body:JSON.stringify({expiresIn:3600,paths:files.map(f=>f.path)})});
+    if(!r.ok){if(r.status===404)GA_BUCKET_OK=false;return;}const rows=await r.json();const base=cloudCfg().url.replace(/\/$/,'')+'/storage/v1';
+    for(const row of (Array.isArray(rows)?rows:[])){if(!row.signedURL)continue;const f=files.find(x=>x.path===row.path);if(f)GA_URL_CACHE.set(f.id,{url:base+row.signedURL,exp:Date.now()+50*60*1000});}
+  }catch(e){console.error(e);}
+}
+async function gaBucketCheck(force){
+  if(!cloudAuthed())return null;if(GA_BUCKET_OK!=null&&!force)return GA_BUCKET_OK;
+  try{const r=await cloudFetch('/storage/v1/object/list/'+GA_BUCKET,{method:'POST',body:JSON.stringify({prefix:gaAcademy(),limit:1,offset:0})});GA_BUCKET_OK=r.ok;}catch(e){GA_BUCKET_OK=null;}
+  return GA_BUCKET_OK;
+}
+// --- epl_state 행 저장 (설정 불필요) ---
+async function gaDbPut(file,blob){
+  if(blob.size>GA_DB_MAX)throw new Error('파일이 너무 큽니다 ('+gaSizeK(blob.size)+'). 12 MB 이하로 올리거나 저장소 설정에서 버킷을 만드세요.');
+  const b64=await gaBlobToB64(blob);const total=Math.max(1,Math.ceil(b64.length/GA_DB_CHUNK));
+  for(let i=0;i<total;i++){const row={id:gaRowPrefix(file)+String(i).padStart(3,'0'),data:{kind:'archive_file',file_id:file.id,student_id:file.student_id,academy_id:file.academy_id,mime:file.mime,seq:i,total,b64:b64.slice(i*GA_DB_CHUNK,(i+1)*GA_DB_CHUNK)},version:1,updated_at:nowISO(),updated_by:'archive'};
+    const r=await cloudFetch('/rest/v1/epl_state?on_conflict=id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(row)});
+    if(!(r.ok||r.status===201||r.status===204)){let t='';try{t=await r.text();}catch(e){}throw new Error('서버 저장 실패 '+r.status+(t?' · '+t.slice(0,100):''));}}
+  file.chunks=total;return true;
+}
+async function gaDbGet(file){
+  const r=await cloudFetch('/rest/v1/epl_state?id=like.'+encodeURIComponent(gaRowPrefix(file)+'*')+'&select=id,data&order=id.asc');
+  if(!r.ok)return null;const rows=await r.json();if(!rows.length)return null;rows.sort((a,b)=>num(a.data.seq)-num(b.data.seq));
+  try{return gaB64ToBlob(rows.map(x=>x.data.b64||'').join(''),file.mime);}catch(e){console.error(e);return null;}
+}
+async function gaDbDel(file){try{await cloudFetch('/rest/v1/epl_state?id=like.'+encodeURIComponent(gaRowPrefix(file)+'*'),{method:'DELETE'});}catch(e){console.error(e);}}
+// --- 공통 ---
+async function gaRemoteSave(file,blob){
+  // 버킷이 있으면 버킷, 없으면 epl_state 행. 둘 다 실패하면 throw.
+  if(GA_BUCKET_OK!==false){try{await gaBucketPut(file,blob);file.storage='cloud';delete file.pending;return 'cloud';}catch(e){if(!e.bucketMissing)console.error(e);GA_BUCKET_OK=false;}}
+  await gaDbPut(file,blob);file.storage='db';delete file.pending;return 'db';
+}
+async function gaRemoveRemote(file){if(!cloudAuthed()||!file)return;if(file.storage==='db'){await gaDbDel(file);return;}if(file.storage==='cloud'){try{await cloudFetch('/storage/v1/object/'+GA_BUCKET+'/'+file.path,{method:'DELETE'});}catch(e){console.error(e);}}}
+async function gaLocalUrl(f){if(GA_OBJ_CACHE.has(f.id))return GA_OBJ_CACHE.get(f.id);const b=await getPhoto(f.local_key||f.id);if(!b)return null;const u=URL.createObjectURL(b);GA_OBJ_CACHE.set(f.id,u);return u;}
+async function gaRemoteBlob(f){
+  // 다른 기기에서 올린 파일을 서버에서 받아 이 기기에 캐시한다
+  if(!cloudAuthed())return null;let b=null,via=null;
+  if(f.storage==='db'||f.storage==='local'){b=await gaDbGet(f);if(b)via='db';}
+  if(!b&&(f.storage==='cloud'||f.storage==='local')&&GA_BUCKET_OK!==false){await gaSignBatch([Object.assign({},f,{storage:'cloud'})]);const c=GA_URL_CACHE.get(f.id);if(c){try{const r=await fetch(c.url);if(r.ok){b=await r.blob();via='cloud';}}catch(e){}}}
+  if(b){await putPhoto(f.local_key||f.id,b);if(f.storage==='local'&&via){f.storage=via;delete f.pending;}}
+  return b;
+}
+async function gaFileUrl(f){
+  if(!f)return null;const l=await gaLocalUrl(f);if(l)return l;
+  const c=GA_URL_CACHE.get(f.id);if(c&&c.exp>Date.now())return c.url;
+  if(!cloudAuthed())return null;
+  if(f.storage==='cloud'){await gaSignBatch([f]);const c2=GA_URL_CACHE.get(f.id);if(c2)return c2.url;}
+  const b=await gaRemoteBlob(f);if(!b)return null;const u=URL.createObjectURL(b);GA_OBJ_CACHE.set(f.id,u);return u;
+}
+async function gaSaveFile(sid,blob,mime,name){
+  gaEnsure(S);const id=uid('f');const file={id,academy_id:gaAcademy(),student_id:sid,kind:gaKind(mime),mime,size:blob.size,name:name||'',path:gaAcademy()+'/'+gaId(sid)+'/'+id+'.'+gaExt(mime),storage:'local',local_key:id,created_at:nowISO(),created_by:myId(null)};
+  const ok=await putPhoto(id,blob);
+  if(cloudAuthed()){try{await gaRemoteSave(file,blob);}catch(e){console.error(e);if(!ok)throw new Error('서버 저장과 기기 저장이 모두 실패했습니다. '+e.message);file.pending=true;toast('서버 저장 실패 · 이 기기에 보관, 연결되면 자동으로 올립니다 ('+e.message+')');}}
+  else{if(!ok)throw new Error('이 기기에 파일을 저장할 수 없습니다 (브라우저 저장소 차단)');file.pending=true;}
+  S.archive_files.push(file);return file;
+}
+async function gaSyncPending(){
+  if(!cloudAuthed()||gaSyncPending._busy||!S.archive_files)return;gaSyncPending._busy=true;let n=0;
+  try{for(const f of S.archive_files){if(f.storage==='cloud'||f.storage==='db')continue;const b=await getPhoto(f.local_key||f.id);if(!b)continue;try{await gaRemoteSave(f,b);n++;}catch(e){console.error(e);break;}}
+    if(n){persist();toast('아카이브 파일 '+n+'개를 서버에 올렸습니다');if(route().name==='archive')render();}}
+  finally{gaSyncPending._busy=false;}
+}
+async function gaHydrate(){
+  const els=[...document.querySelectorAll('[data-gafile]')];if(!els.length)return;const need=[];
+  for(const el of els){if(el.dataset.gaDone)continue;const f=gaFile(el.dataset.gafile);if(!f){gaSetUrl(el,null);continue;}
+    const l=await gaLocalUrl(f);if(l){gaSetUrl(el,l);continue;}const c=GA_URL_CACHE.get(f.id);if(c&&c.exp>Date.now()){gaSetUrl(el,c.url);continue;}
+    if(cloudAuthed())need.push({el,f});else gaSetUrl(el,null);}
+  if(!need.length)return;
+  const cloudFiles=[...new Map(need.filter(x=>x.f.storage==='cloud').map(x=>[x.f.id,x.f])).values()];await gaSignBatch(cloudFiles);
+  for(const {el,f} of need){if(el.dataset.gaDone)continue;const c=GA_URL_CACHE.get(f.id);if(c){gaSetUrl(el,c.url);continue;}
+    const b=await gaRemoteBlob(f);if(b){const u=URL.createObjectURL(b);GA_OBJ_CACHE.set(f.id,u);gaSetUrl(el,u);}else gaSetUrl(el,null);}
+}
+function gaSetUrl(el,url){el.dataset.gaDone='1';if(el.tagName==='IMG'){if(url)el.src=url;else{el.removeAttribute('src');const p=el.closest('.ga-fig');if(p)p.classList.add('ga-missing');}}else{if(url)el.dataset.url=url;else el.classList.add('ga-missing');}}
+
+// ===== 4. 세션 입력과 자동 연결 (PHASE 1) ====================================
+function gaIngestSession(sess){
+  if(!sess||!sess.student_id)return false;gaEnsure(S);let changed=false;const sid=sess.student_id;
+  // 4-1 원서 제목 → 독서 기록 (학생+제목당 1건, 읽은 날짜를 누적)
+  let reading=null;const title=String(sess.original_book_title||'').trim();
+  if(title){const rid='ar_'+gaId(sid)+'_'+(slug(title)||gaId(title)).slice(0,60);reading=gaReading(rid)||S.archive_readings.find(r=>r.student_id===sid&&normName(r.title)===normName(title))||null;
+    if(!reading){const cat=gaCatalog(title);reading={id:rid,academy_id:gaAcademy(),student_id:sid,teacher_id:sess.teacher_id||null,location_id:sess.location_id||null,title:cat?cat.title:title,series:cat?(cat.series||''):'',ar_level:cat&&cat.ar_level!=null?cat.ar_level:null,status:'READING',date:sess.session_date,last_date:sess.session_date,done_date:null,dates:[sess.session_date],session_ids:[sess.id],tags:[],response:'',booktalk:'',booktalk_url:sess.recording_url||'',source:'SESSION',created_at:nowISO(),updated_at:nowISO()};S.archive_readings.push(reading);changed=true;}
+    else{reading.session_ids=reading.session_ids||[];reading.dates=reading.dates||[];if(!reading.session_ids.includes(sess.id)){reading.session_ids.push(sess.id);changed=true;}if(!reading.dates.includes(sess.session_date)){reading.dates.push(sess.session_date);changed=true;}
+      const ds=gaReadingDates(reading);if(reading.date!==ds[0]){reading.date=ds[0];changed=true;}if(reading.last_date!==ds[ds.length-1]){reading.last_date=ds[ds.length-1];changed=true;}
+      if(sess.recording_url&&!reading.booktalk_url){reading.booktalk_url=sess.recording_url;changed=true;}if(changed)reading.updated_at=nowISO();}}
+  // 4-2 라이팅 활동(사진·작품 제목·루브릭이 있는 것) → 작품 + 학생 원본 버전
+  for(const a of (sess.activities||[])){
+    if(a.activity_type!=='INDIVIDUAL_PROGRESS')continue;const b=byId(S.books,a.book_id);if(!b||b.category!=='WRITING')continue;
+    if(!(a.photo_id||(a.work&&String(a.work).trim())||(a.rubric&&Object.values(a.rubric).some(v=>v!=null))))continue;
+    const wid='aw_'+gaId(sess.id)+'_'+gaId(a.track_id||a.book_id);let w=gaWriting(wid);
+    if(!w){const unit=a.unit_id?unitShort(b,a.unit_id):'';const wtitle=(a.work&&!/^https?:\/\//i.test(a.work))?String(a.work).trim():(b.book_name+(unit?' · '+unit:''));
+      w={id:wid,academy_id:gaAcademy(),student_id:sid,teacher_id:sess.teacher_id||null,location_id:sess.location_id||null,date:sess.session_date,title:wtitle,project:'교재 작문',reading_id:reading?reading.id:null,book_title:reading?reading.title:'',session_id:sess.id,track_id:a.track_id||null,textbook:b.book_name+(unit?' '+unit:''),rubric:a.rubric?Object.assign({},a.rubric):null,checks:(a.evidence&&Array.isArray(a.evidence.ideas))?a.evidence.ideas.slice():[],evidence:a.evidence?Object.assign({},a.evidence):null,feedback:'',growth_comment:'',featured:null,approval:'NONE',approved_by:null,approved_at:null,reviewed_at:null,source:'SESSION',created_at:nowISO(),updated_at:nowISO()};
+      S.archive_writings.push(w);gaVersionEnsure(wid,'ORIGINAL');changed=true;}
+    else{if(!w.rubric&&a.rubric&&Object.values(a.rubric).some(v=>v!=null)){w.rubric=Object.assign({},a.rubric);changed=true;}if(!w.reading_id&&reading){w.reading_id=reading.id;w.book_title=reading.title;changed=true;}}
+    if(a.photo_id){const fid='af_'+gaId(a.photo_id);let f=gaFile(fid)||S.archive_files.find(x=>x.local_key===a.photo_id);
+      if(!f){f={id:fid,academy_id:gaAcademy(),student_id:sid,kind:'image',mime:'image/jpeg',size:null,name:'',path:gaAcademy()+'/'+gaId(sid)+'/'+fid+'.jpg',storage:'local',local_key:a.photo_id,pending:true,created_at:nowISO(),created_by:sess.teacher_id||null};S.archive_files.push(f);changed=true;}
+      const v=gaVersionEnsure(wid,'ORIGINAL');if(!v.files.includes(f.id)){v.files.push(f.id);changed=true;}}
+  }
+  return changed;
+}
+function gaBackfill(){let n=0;for(const x of (S.sessions||[]))if(gaIngestSession(x))n++;return n;}
+// 세션이 삭제되면(기록 수정) 그 세션에서 자동 생성된 아카이브 항목을 정리한다 — 교사가 손댄 작품은 남기고 연결만 푼다
+function gaOnSessionDeleted(sess){
+  if(!sess)return;gaEnsure(S);const sid=sess.student_id;
+  for(const w of S.archive_writings.filter(x=>x.session_id===sess.id)){
+    const touched=w.reviewed_at||w.featured||(w.approval&&w.approval!=='NONE')||w.feedback||w.growth_comment||gaHasContent(gaVersion(w.id,'REVISED'))||gaHasContent(gaVersion(w.id,'FINAL'));
+    if(w.source==='SESSION'&&!touched){const vs=gaVersions(w.id);for(const v of vs)for(const fid of (v.files||[])){const used=S.archive_versions.some(o=>o.writing_id!==w.id&&(o.files||[]).includes(fid));if(!used)S.archive_files=S.archive_files.filter(f=>f.id!==fid);}
+      S.archive_versions=S.archive_versions.filter(v=>v.writing_id!==w.id);S.archive_writings=S.archive_writings.filter(x=>x.id!==w.id);}
+    else{w.session_id=null;w.updated_at=nowISO();}
+  }
+  const title=String(sess.original_book_title||'').trim();
+  if(title){const r=S.archive_readings.find(x=>x.student_id===sid&&normName(x.title)===normName(title));
+    if(r){r.session_ids=(r.session_ids||[]).filter(id=>id!==sess.id);const others=S.sessions.some(x=>x.id!==sess.id&&x.student_id===sid&&x.session_date===sess.session_date&&normName(x.original_book_title)===normName(title));
+      if(!others)r.dates=(r.dates||[]).filter(d=>d!==sess.session_date);
+      const empty=!(r.dates||[]).length&&!r.response&&!r.booktalk&&!(r.tags||[]).length&&r.status!=='DONE';
+      if(empty&&r.source==='SESSION'){S.archive_readings=S.archive_readings.filter(x=>x.id!==r.id);for(const w of S.archive_writings)if(w.reading_id===r.id)w.reading_id=null;}
+      else{const ds=gaReadingDates(r);r.date=ds[0]||r.date;r.last_date=ds[ds.length-1]||r.last_date;r.updated_at=nowISO();}}}
+}
+async function gaUploadLegacy(sess,acts){
+  // 세션 입력에서 붙인 사진을 아카이브 파일로도 올린다 (blob이 손에 있는 지금이 유일한 기회)
+  let changed=false;
+  for(const a of acts){if(!a.photo_blob)continue;const act=sess.activities.find(x=>x.track_id===a.track_id&&x.activity_type==='INDIVIDUAL_PROGRESS');if(!act||!act.photo_id)continue;
+    const f=gaFile('af_'+gaId(act.photo_id))||S.archive_files.find(x=>x.local_key===act.photo_id);if(!f)continue;f.size=a.photo_blob.size;
+    if(cloudAuthed()&&f.storage!=='cloud'&&f.storage!=='db'){try{await gaRemoteSave(f,a.photo_blob);changed=true;}catch(e){console.error(e);}}}
+  if(changed)persist();
+}
+
+// ===== 5. 화면 ================================================================
+function gaView(q){
+  gaEnsure(S);try{if(gaBackfill())persist();}catch(e){console.error(e);}
+  const r=route();if(r.id){const s=studentOf(r.id);if(!s)return notFound('학생');if(q.w)return gaViewWriting(s,q);return gaViewStudent(s,q);}return gaViewList(q);
+}
+function gaStorageLine(){
+  if(!cloudOn())return '<span class="badge b-muted">파일: 이 기기에만 저장</span><span class="note">공유 저장소를 연결하면 사진·PDF가 모든 기기에서 보입니다 (설정 → 공유 저장소).</span>';
+  if(!cloudAuthed())return '<span class="badge b-warn">파일 저장소: 로그인 필요</span>';
+  const pend=S.archive_files.filter(f=>f.storage!=='cloud'&&f.storage!=='db').length;
+  return (GA_BUCKET_OK===true?'<span class="badge b-good">파일 저장소: 전용 버킷</span>':'<span class="badge b-good">파일 저장소: 공유 DB (설정 없이 작동)</span>')+(pend?'<button class="btn s" data-act="gaSync">이 기기 파일 '+pend+'개 서버에 올리기</button>':'');
+}
+function gaViewList(q){
+  const me=currentUser();const date=q.date||defaultHomeDate();const wd=wdOf(date);const loc=q.loc||'';const all=q.all==='1';const ym=gaYm();
+  const tchRaw=q.tch!=null&&q.tch!==''?q.tch:(me&&me.role==='TEACHER'?me.id:'all');const tch=tchRaw==='all'?'':tchRaw;const kw=(q.kw||'').trim().toLowerCase();
+  let rows=S.students.filter(s=>s.status==='ACTIVE'&&(!loc||s.location_id===loc)&&(!tch||s.homeroom_teacher_id===tch));
+  if(!all)rows=rows.filter(s=>s.schedules.some(x=>x.weekday===wd));
+  if(kw)rows=rows.filter(s=>s.name.toLowerCase().includes(kw));
+  rows=rows.map(s=>({s,sch:s.schedules.find(x=>x.weekday===wd)||null,st:gaStats(s.id,ym)})).sort((a,b)=>all?a.s.name.localeCompare(b.s.name,'ko'):((a.sch?a.sch.time:'99').localeCompare(b.sch?b.sch.time:'99')||a.s.name.localeCompare(b.s.name,'ko')));
+  const totals=rows.reduce((t,r)=>{t.books+=r.st.booksMonth;t.works+=r.st.worksMonth;t.review+=r.st.review;t.appr+=r.st.pendingAppr;t.feat+=r.st.featured?1:0;return t;},{books:0,works:0,review:0,appr:0,feat:0});
+  const card=r=>{const s=r.s,st=r.st;const stage=gaStageOf(s);
+    return '<a class="ga-card" href="#/archive/'+s.id+'"><div class="ga-card-h"><span class="nm">'+h(s.name)+'</span><span class="note">AR '+h(s.ar_level)+(stage?' · '+h(stage):'')+'</span>'+(r.sch&&!all?'<span class="ga-time">'+h(r.sch.time)+'</span>':'')+'</div>'+
+    '<div class="ga-nums"><div><b>'+st.booksMonth+'</b><small>이달 원서</small></div><div><b>'+st.worksMonth+'</b><small>이달 작품</small></div><div><b>'+st.books+'</b><small>누적 원서</small></div><div><b>'+st.works+'</b><small>누적 작품</small></div></div>'+
+    '<div class="flags">'+(st.review?badge('b-warn','첨삭 대기 '+st.review):'')+(st.featured?badge('b-good','이달 대표작 ✓'):badge('b-muted','대표작 미선정'))+(st.pendingAppr?badge('b-brass','공개 승인 '+st.pendingAppr):'')+'</div>'+
+    (st.last?'<div class="note ga-last">최근 원서 · '+h(st.last.title)+' <span>'+h(st.last.last_date||st.last.date||'')+'</span></div>':'<div class="note ga-last">아직 기록 없음 — 세션을 입력하면 자동으로 쌓입니다</div>')+'</a>';};
+  return '<div class="ga"><div class="ga-hero"><div><div class="ga-kicker">EPL GROWTH ARCHIVE</div><h1>성장 아카이브</h1><p class="sub" style="margin:4px 0 0">READ → THINK → WRITE → REFLECT → GROW → PUBLISH<br>수업에서 나온 독서·라이팅 기록이 학생별로 쌓이고, 월간 포트폴리오·분기 성장 리포트·연간 작품집의 재료가 됩니다.</p></div>'+
+  '<div class="ga-hero-n"><div><b>'+totals.books+'</b><small>'+gaYmK(ym)+' 원서</small></div><div><b>'+totals.works+'</b><small>작품</small></div><div><b>'+totals.review+'</b><small>첨삭 대기</small></div><div><b>'+totals.feat+'/'+rows.length+'</b><small>대표작 선정</small></div>'+(isDirector()?'<div><b>'+totals.appr+'</b><small>공개 승인 대기</small></div>':'')+'</div></div>'+
+  '<div class="bar"><label class="f">날짜<input type="date" class="hq" data-k="date" value="'+date+'"'+(all?' disabled':'')+'></label><label class="f">지점<select class="hq" data-k="loc"><option value="">전체</option>'+opt(S.locations,loc)+'</select></label><label class="f">담임<select class="hq" data-k="tch"><option value="all"'+(tch?'':' selected')+'>전체</option>'+opt(S.teachers.filter(t=>t.role==='TEACHER'),tch)+'</select></label>'+
+  '<label class="f">범위<select class="hq" data-k="all"><option value="0"'+(all?'':' selected')+'>'+date+' ('+WD[wd]+') 등원 학생</option><option value="1"'+(all?' selected':'')+'>전체 재원생</option></select></label><label class="f">이름<input type="text" class="hq" data-k="kw" value="'+h(q.kw||'')+'" placeholder="검색" style="min-width:110px"></label><div class="sp"></div><div class="flags">'+gaStorageLine()+'</div></div>'+
+  (rows.length?'<div class="ga-cards">'+rows.map(card).join('')+'</div>':'<div class="empty">조건에 맞는 학생이 없습니다. 범위를 "전체 재원생"으로 바꾸거나 담임을 "전체"로 두세요.</div>')+
+  (isDirector()?gaSetupPanel():'')+'</div>';
+}
+function gaSetupPanel(){
+  const a=gaMeta();const c=cloudCfg();const pend=S.archive_files.filter(f=>f.storage!=='cloud'&&f.storage!=='db').length;const total=S.archive_files.length;
+  return '<details class="panel ga-setup" id="gaSetup"><summary><h2 style="display:inline">저장소 설정 · 프로젝트 · 태그 <span class="note">(원장)</span></h2></summary>'+
+  '<div class="grid g2" style="margin-top:12px"><div><h3 style="margin-top:0">파일 저장소</h3><p class="note">추가 설정 없이 바로 작동합니다 — 사진·PDF는 공유 저장소(epl_state)에 조각으로 저장되고 학원 계정으로만 열립니다. 파일이 수천 장을 넘어가면 아래 SQL을 Supabase SQL Editor에서 한 번 실행해 전용 버킷 <b>'+h(a.bucket||GA_BUCKET)+'</b>을 만드세요. 그 뒤로는 새 파일이 자동으로 버킷에 저장됩니다(열람 링크 1시간 유효).</p>'+
+  '<div class="flags" style="margin-bottom:8px">'+(cloudAuthed()?badge('b-good','연결됨 · '+h((c.url||'').replace(/^https?:\/\//,'')))+' '+(GA_BUCKET_OK===true?badge('b-good','전용 버킷 사용 중'):GA_BUCKET_OK===false?badge('b-muted','공유 DB 저장 (버킷 없음)'):badge('b-muted','버킷 미확인')):badge('b-muted','공유 저장소 미연결'))+badge('b-muted','파일 '+total+'개 · 서버 미반영 '+pend+'개 · DB '+S.archive_files.filter(f=>f.storage==='db').length+' · 버킷 '+S.archive_files.filter(f=>f.storage==='cloud').length)+'</div>'+
+  '<div class="bar"><button class="btn" data-act="gaBucketCheck">버킷 확인</button><button class="btn" data-act="gaSync">이 기기 파일 서버에 올리기</button><button class="btn" data-act="gaCopySql">SQL 복사</button></div>'+
+  '<textarea readonly style="min-height:150px;font-family:ui-monospace,monospace;font-size:12px" onclick="this.select()">'+h(GA_SQL)+'</textarea></div>'+
+  '<div><h3 style="margin-top:0">프로젝트 목록</h3><p class="note">작품을 올릴 때 고르는 프로젝트 이름. 쉼표로 구분.</p><textarea id="ga_projects" style="min-height:70px">'+h(a.projects.join(', '))+'</textarea>'+
+  '<h3>관심 주제 태그</h3><p class="note">독서 기록의 태그 칩. 쉼표로 구분.</p><textarea id="ga_tags" style="min-height:70px">'+h(a.tags.join(', '))+'</textarea>'+
+  '<div class="bar" style="margin-top:10px"><button class="btn p" data-act="gaSettingsSave">저장</button></div>'+
+  '<h3>최근 이력</h3>'+(S.archive_log.length?'<table class="t" style="font-size:13px"><tbody>'+S.archive_log.slice(-8).reverse().map(l=>'<tr><td style="white-space:nowrap" class="note">'+h((l.at||'').slice(0,16).replace('T',' '))+'</td><td>'+h(l.by_name||'')+'</td><td>'+h(l.type)+' · '+h(l.note||'')+'</td></tr>').join('')+'</tbody></table>':'<p class="note">아직 없음</p>')+'</div></div></details>';
+}
+function gaStudentHead(s,extra){
+  const stage=gaStageOf(s);const ar=latestAssessment(s.id,'AR');
+  return '<div class="bar"><div><div class="ga-kicker">GROWTH ARCHIVE</div><h1>'+h(s.name)+(s.grade?' <span class="note" style="font-size:14px;font-weight:400">'+h(s.grade)+'</span>':'')+'</h1><p class="sub" style="margin:0">AR '+h(s.ar_level)+(ar?' <span class="note">('+h(ar.date)+')</span>':'')+(stage?' · EPL '+h(stage):'')+' · 담임 '+h(nameOf(S.teachers,s.homeroom_teacher_id))+' · '+h(nameOf(S.locations,s.location_id))+'</p></div><span class="sp"></span>'+(extra||'')+'</div>';
+}
+function gaViewStudent(s,q){
+  const tab=q.tab==='writing'?'writing':'reading';const ym=gaYm();const st=gaStats(s.id,ym);
+  const tabs='<div class="tabs"><a href="#/archive/'+s.id+'?tab=reading" class="'+(tab==='reading'?'on':'')+'">Reading Record · 독서 기록 <span class="note">'+st.books+'</span></a><a href="#/archive/'+s.id+'?tab=writing" class="'+(tab==='writing'?'on':'')+'">Writing Studio · 라이팅 <span class="note">'+st.works+'</span>'+(st.review?' '+badge('b-warn','첨삭 '+st.review):'')+'</a></div>';
+  const strip='<div class="ga-strip"><div><b>'+st.booksMonth+'</b><small>'+gaYmK(ym)+' 원서</small></div><div><b>'+st.worksMonth+'</b><small>이달 작품</small></div><div><b>'+st.done+'</b><small>완독 누적</small></div><div><b>'+(st.featured?'✓':'—')+'</b><small>이달 대표작</small></div><div><b>'+st.approved+'</b><small>학부모 공개</small></div></div>';
+  return '<div class="ga">'+gaStudentHead(s,'<a class="btn" href="#/archive">아카이브 목록</a><a class="btn" href="#/student/'+s.id+'">학생 페이지</a><a class="btn p" href="#/session/'+s.id+'">세션 입력</a>')+strip+tabs+(tab==='reading'?gaReadingTab(s,q):gaWritingTab(s,q))+'</div>';
+}
+// --- 5-1 Reading Record -------------------------------------------------------
+function gaTagChips(sel,prefix){const tags=[...new Set([...gaMeta().tags,...(sel||[])])];return '<div class="chips">'+tags.map(t=>'<label class="chip-opt"><input type="checkbox" class="'+prefix+'" value="'+h(t)+'"'+((sel||[]).includes(t)?' checked':'')+'><span>'+h(t)+'</span></label>').join('')+'<input type="text" id="'+prefix+'_new" placeholder="+ 태그" style="min-width:80px;width:100px;padding:4px 8px;font-size:13px"></div>';}
+function gaReadingForm(s,r){
+  r=r||{};const dates=gaReadingDates(r);const isEdit=!!r.id;
+  return '<div class="panel ga-form" id="gaReadingForm"><h2>'+(isEdit?'독서 기록 수정':'원서 기록 추가')+'</h2><p class="note">세션 입력의 원서 제목은 자동으로 여기에 쌓입니다. 완독 처리·감상·태그만 보태면 됩니다.</p>'+
+  '<div class="row"><label class="f" style="flex:2;min-width:220px">원서 제목<input type="text" id="gr_title" class="ga-title" list="gaBookList" value="'+h(r.title||'')+'" placeholder="제목을 쓰면 목록에서 찾아 줍니다" style="width:100%"></label>'+
+  '<label class="f" style="flex:1;min-width:140px">시리즈<input type="text" id="gr_series" value="'+h(r.series||'')+'" style="width:100%"></label>'+
+  '<label class="f">AR<input type="number" step="0.1" id="gr_ar" value="'+h(r.ar_level!=null?r.ar_level:'')+'" placeholder="2.4" style="width:80px"></label>'+
+  '<label class="f">읽은 날짜<input type="date" id="gr_date" value="'+h(isEdit?(r.last_date||r.date||todayISO()):todayISO())+'"></label></div>'+
+  '<div class="row" style="margin-top:10px"><div class="chips">'+['READING','DONE','PAUSED'].map(k=>'<label class="chip-opt"><input type="radio" name="gr_status" value="'+k+'"'+((r.status||'READING')===k?' checked':'')+'><span>'+GA_READ_ST[k]+'</span></label>').join('')+'</div>'+(dates.length?'<span class="note">읽은 날 '+dates.length+'회 · '+h(dates[0])+(dates.length>1?' ~ '+h(dates[dates.length-1]):'')+'</span>':'')+'</div>'+
+  '<label class="f" style="margin-top:10px">관심 주제 태그'+gaTagChips(r.tags||[],'gr_tag')+'</label>'+
+  '<div class="grid g2" style="margin-top:10px"><label class="f">학생 감상 한 줄 <span class="note">(학생 말 그대로)</span><textarea id="gr_resp" style="min-height:64px">'+h(r.response||'')+'</textarea></label><label class="f">북토킹 기록 <span class="note">(교사 · 내부용)</span><textarea id="gr_talk" style="min-height:64px">'+h(r.booktalk||'')+'</textarea></label></div>'+
+  '<div class="row" style="margin-top:8px"><label class="f" style="flex:1;min-width:220px">북토킹 녹음 링크 (선택)<input type="text" id="gr_url" value="'+h(r.booktalk_url||'')+'" style="width:100%"></label></div>'+
+  '<div class="bar" style="margin-top:12px"><button class="btn p" data-act="gaReadingSave" data-sid="'+s.id+'"'+(isEdit?' data-id="'+h(r.id)+'"':'')+'>'+(isEdit?'수정 저장':'기록 저장')+'</button>'+(isEdit?'<a class="btn" href="#/archive/'+s.id+'?tab=reading">새 기록으로</a><button class="btn d" data-act="gaReadingDel" data-id="'+h(r.id)+'">삭제</button>':'')+'</div></div>'+
+  '<datalist id="gaBookList">'+gaBookTitles().map(t=>'<option value="'+h(t)+'">').join('')+'</datalist>';
+}
+function gaCover(r,sid){
+  const n=gaReadingDates(r).length;
+  return '<a class="ga-cover st-'+h(r.status||'READING')+'" href="#/archive/'+sid+'?tab=reading&r='+h(r.id)+'"><div class="t">'+h(r.title)+'</div>'+(r.series?'<div class="s">'+h(r.series)+'</div>':'')+'<div class="tg">'+(r.tags||[]).slice(0,3).map(t=>'<span>'+h(t)+'</span>').join('')+'</div><div class="f"><span>'+badge(GA_READ_CLS[r.status]||'b-muted',GA_READ_ST[r.status]||r.status)+'<small class="note" style="display:block;margin-top:3px">'+h(r.last_date||r.date||'')+(n>1?' · '+n+'회':'')+'</small></span>'+(r.ar_level!=null&&r.ar_level!==''?'<span class="ar">'+h(r.ar_level)+'</span>':'')+'</div></a>';
+}
+function gaReadingTab(s,q){
+  const list=gaReadings(s.id);const edit=q.r?gaReading(q.r):null;const kw=(q.rk||'').toLowerCase();
+  const shown=kw?list.filter(r=>r.title.toLowerCase().includes(kw)||(r.series||'').toLowerCase().includes(kw)):list;
+  const ars=list.filter(r=>r.ar_level!=null&&r.ar_level!=='').map(r=>Number(r.ar_level)).filter(Number.isFinite);
+  const arLine=ars.length?'AR 범위 '+Math.min(...ars)+' ~ '+Math.max(...ars):'';
+  const tagCount={};for(const r of list)for(const t of (r.tags||[]))tagCount[t]=(tagCount[t]||0)+1;const topTags=Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  return gaReadingForm(s,edit)+
+  '<div class="panel"><div class="bar"><h2 style="margin:0">MY READING COLLECTION <span class="note">'+list.length+'권 · 완독 '+list.filter(r=>r.status==='DONE').length+'권'+(arLine?' · '+arLine:'')+'</span></h2><span class="sp"></span>'+(topTags.length?'<span class="note">관심 주제 · '+topTags.map(([t,n])=>h(t)+' '+n).join(' · ')+'</span>':'')+'<input type="text" class="hq" data-k="rk" value="'+h(q.rk||'')+'" placeholder="제목 검색" style="min-width:120px"></div>'+
+  (shown.length?'<div class="ga-shelf">'+shown.map(r=>gaCover(r,s.id)).join('')+'</div>':'<div class="empty">아직 원서 기록이 없습니다. 위에서 추가하거나 세션 입력에서 원서 제목을 적으면 자동으로 쌓입니다.</div>')+'</div>';
+}
+// --- 5-2 Writing Studio -------------------------------------------------------
+function gaProjectSelect(id,val){const ps=[...new Set([...gaMeta().projects,...(val?[val]:[])])];return '<select id="'+id+'">'+ps.map(p=>'<option value="'+h(p)+'"'+(p===val?' selected':'')+'>'+h(p)+'</option>').join('')+'<option value="__new">+ 새 프로젝트…</option></select>';}
+function gaReadingSelect(id,sid,val){const rs=gaReadings(sid);return '<select id="'+id+'"><option value="">— 연결 안 함 —</option>'+rs.map(r=>'<option value="'+h(r.id)+'"'+(r.id===val?' selected':'')+'>'+h(r.title)+'</option>').join('')+'</select>';}
+function gaWorkCard(w,sid){
+  const st=gaStatusOf(w);const th=gaThumb(w);const avg=rubricAvg(w.rubric);const pdfN=gaVersions(w.id).reduce((n,v)=>n+(v.files||[]).filter(fid=>(gaFile(fid)||{}).kind==='pdf').length,0);
+  return '<a class="ga-work" href="#/archive/'+sid+'?tab=writing&w='+h(w.id)+'"><div class="ph ga-fig">'+(th?'<img data-gafile="'+h(th.id)+'" alt="'+h(w.title)+'"><span class="ga-miss">다른 기기에 저장됨<br>서버 연결 후 표시</span>':'<span class="q">'+(pdfN?'PDF':'“')+'</span>')+(w.featured?'<span class="ga-star" title="'+h(gaYmK(w.featured))+' 대표작">★</span>':'')+'</div>'+
+  '<div class="b"><div class="t">'+h(w.title)+'</div><div class="m"><span>'+h(w.date||'')+'</span><span>'+h(w.project||'')+'</span>'+(w.book_title?'<span>📖 '+h(w.book_title)+'</span>':'')+'</div><div class="flags" style="margin-top:6px">'+badge(GA_W_CLS[st],GA_W_ST[st])+(avg!=null?badge('b-brass','평균 '+avg):'')+(w.approval&&w.approval!=='NONE'?badge(GA_APPR_CLS[w.approval],GA_APPR[w.approval]):'')+'</div></div></a>';
+}
+function gaWritingTab(s,q){
+  GA_PENDING.new=[];const list=gaWritings(s.id);const ym=gaYm();const months=[...new Set(list.map(w=>(w.date||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const groups=months.map(m=>({m,items:list.filter(w=>(w.date||'').slice(0,7)===m)}));
+  return '<div class="panel ga-form" id="gaWritingForm"><h2>새 작품 올리기</h2><p class="note">학생이 쓴 종이를 사진으로 찍거나 PDF를 올리면 <b>학생 원본</b>으로 보관됩니다. 첨삭·평가·수정본은 작품을 연 뒤에 합니다.</p>'+
+  '<div class="row"><label class="f" style="flex:2;min-width:220px">제목<input type="text" id="gw_title" placeholder="예: My Weekend / If I were a bird" style="width:100%"></label><label class="f">프로젝트'+gaProjectSelect('gw_project',gaMeta().projects[0])+'<input type="text" id="gw_project_new" placeholder="새 프로젝트 이름" hidden style="margin-top:4px"></label><label class="f">연결 원서'+gaReadingSelect('gw_reading',s.id,'')+'</label><label class="f">날짜<input type="date" id="gw_date" value="'+todayISO()+'"></label></div>'+
+  '<div class="row" style="margin-top:10px"><label class="btn" style="cursor:pointer">📷 사진 · PDF 선택<input type="file" class="ga-newfile" id="gw_file" accept="image/*,application/pdf" multiple hidden></label><span class="note">여러 장 가능 · 사진은 자동으로 줄여 저장</span></div><div id="gw_prev" class="ga-files" style="margin-top:8px"></div>'+
+  '<label class="f" style="margin-top:10px">학생 원본 텍스트 (선택 · 타이핑한 글이나 받아 적은 글)<textarea id="gw_text" style="min-height:70px" placeholder="사진 대신, 또는 사진과 함께"></textarea></label>'+
+  '<div class="bar" style="margin-top:12px"><button class="btn p" data-act="gaWritingCreate" data-sid="'+s.id+'">원본으로 저장</button><span class="note">저장하면 작품 목록에 들어가고 "첨삭 대기"로 표시됩니다.</span></div></div>'+
+  '<div class="panel"><h2>MY WRITING PORTFOLIO <span class="note">'+list.length+'편 · 첨삭 대기 '+list.filter(w=>gaStatusOf(w)==='ORIGINAL').length+'편</span></h2>'+
+  (groups.length?groups.map(g=>'<h3 class="ga-month">'+h(gaYmK(g.m))+(g.m===ym?' <span class="note">이번 달</span>':'')+(g.items.some(w=>w.featured===g.m)?'':' <span class="note" style="color:var(--warn)">대표작 미선정</span>')+'</h3><div class="ga-works">'+g.items.map(w=>gaWorkCard(w,s.id)).join('')+'</div>').join(''):'<div class="empty">아직 작품이 없습니다. 위에서 첫 작품을 올리거나, 세션 입력에서 "오늘 쓴 글 사진"을 붙이면 자동으로 들어옵니다.</div>')+'</div>';
+}
+function gaFileTile(f,wid,vkind,canDel){
+  if(!f)return '';
+  if(f.kind==='pdf')return '<div class="ga-pdf"><button class="link ga-open" data-act="gaOpen" data-file="'+h(f.id)+'" data-gafile="'+h(f.id)+'">📄 '+h(f.name||'PDF')+'</button><small class="note">'+gaSizeK(f.size)+(f.storage!=='cloud'?' · 이 기기':'')+'</small>'+(canDel?'<button class="btn s d" data-act="gaFileDel" data-file="'+h(f.id)+'" data-w="'+h(wid)+'" data-kind="'+vkind+'">✕</button>':'')+'</div>';
+  return '<figure class="ga-fthumb ga-fig"><img data-gafile="'+h(f.id)+'" alt="작품 사진" data-act="gaOpen" data-file="'+h(f.id)+'"><span class="ga-miss">다른 기기에 저장됨</span>'+(canDel?'<button class="btn s d ga-fdel" data-act="gaFileDel" data-file="'+h(f.id)+'" data-w="'+h(wid)+'" data-kind="'+vkind+'" title="파일 삭제">✕</button>':'')+'</figure>';
+}
+function gaVersionCol(w,kind){
+  const v=gaVersion(w.id,kind);const files=v?(v.files||[]).map(gaFile).filter(Boolean):[];
+  return '<div class="ga-ver ga-ver-'+kind.toLowerCase()+'"><h3>'+GA_VKIND[kind]+(v&&v.created_at?' <span class="note" style="letter-spacing:0;text-transform:none">'+h(v.created_at.slice(0,10))+'</span>':'')+'</h3><p class="note" style="margin:0 0 8px">'+GA_VHINT[kind]+'</p>'+
+  '<div class="ga-files">'+files.map(f=>gaFileTile(f,w.id,kind,true)).join('')+'</div>'+
+  '<label class="f" style="margin-top:8px"><textarea class="ga-vtext" id="gv_text_'+kind+'" style="min-height:'+(kind==='FINAL'?'120':'60')+'px" placeholder="'+(kind==='ORIGINAL'?'학생 원본 텍스트 (선택)':kind==='REVISED'?'첨삭 메모 · 고친 문장 (선택)':'최종본 텍스트 — 작품집 조판에 쓰입니다 (권장)')+'">'+h(v?v.text||'':'')+'</textarea></label>'+
+  '<div class="bar" style="margin-top:8px"><label class="btn s" style="cursor:pointer">+ 사진 · PDF<input type="file" class="ga-vfile" data-w="'+h(w.id)+'" data-kind="'+kind+'" accept="image/*,application/pdf" multiple hidden></label><button class="btn s" data-act="gaVersionText" data-w="'+h(w.id)+'" data-kind="'+kind+'">텍스트 저장</button></div></div>';
+}
+function gaRubricPanel(w){
+  const r=w.rubric||{};const ev=w.evidence||{};const checks=w.checks||[];
+  const track=w.track_id?byId(S.tracks,w.track_id):null;const book=track?bookOf(track):null;const target=(book&&book.writing_target)?num(book.writing_target,8):8;
+  const sel=k=>'<select id="ga_rb_'+k+'"><option value="">—</option>'+[5,4,3,2,1].map(v=>'<option value="'+v+'"'+(r[k]===v?' selected':'')+'>'+v+'</option>').join('')+'</select>';
+  return '<div class="panel ga-form"><h2>첨삭 · 평가 <span class="note">체크와 한 줄이면 됩니다</span></h2>'+
+  '<div class="row">'+RUBRIC.map(([k,l,d])=>'<label class="f">'+l+' <span class="note">'+h(d.trim())+'</span>'+sel(k)+'</label>').join('')+'<label class="f">총 문장<input type="number" id="ga_ev_n" min="0" value="'+h(ev.sentences!=null?ev.sentences:'')+'" style="width:70px"></label><label class="f">오류 문장<input type="number" id="ga_ev_e" min="0" value="'+h(ev.errors!=null?ev.errors:'')+'" style="width:70px"></label><button class="btn s" data-act="gaRubricCalc" data-target="'+target+'">세어서 계산</button><button class="link" data-act="gaRubricHelp">기준 보기</button></div>'+
+  '<div id="gaRbHelp" hidden style="margin-top:8px"><div class="tw"><table class="t" style="font-size:13px"><thead><tr><th>점수</th>'+RUBRIC.map(([k,l])=>'<th>'+l+'</th>').join('')+'</tr></thead><tbody>'+[5,4,3,2,1].map(v=>'<tr><td><b>'+v+'</b></td>'+RUBRIC.map(([k])=>'<td>'+h(RUBRIC_ANCHORS[k][v-1])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></div>'+
+  '<div class="chips" style="margin-top:10px">'+IDEA_CHECKS.map(([k,l])=>'<label class="chip-opt"><input type="checkbox" class="ga_chk" value="'+k+'"'+(checks.includes(k)?' checked':'')+'><span>'+l+'</span></label>').join('')+'<label class="chip-opt"><input type="checkbox" id="ga_own"'+(ev.own?' checked':'')+'><span>자기 표현</span></label></div>'+
+  '<div class="grid g2" style="margin-top:10px"><label class="f">학생에게 주는 피드백 <span class="note">(학생·학부모에게 보임 · 2~3줄)</span><textarea id="ga_fb" style="min-height:80px">'+h(w.feedback||'')+'</textarea></label><label class="f">성장 코멘트 <span class="note">(학부모용 · 이전 글과 무엇이 달라졌는지)</span><textarea id="ga_gc" style="min-height:80px">'+h(w.growth_comment||'')+'</textarea></label></div>'+
+  '<div class="bar" style="margin-top:12px"><button class="btn p" data-act="gaReviewSave" data-w="'+h(w.id)+'">평가 저장</button>'+(w.reviewed_at?'<span class="note">마지막 저장 '+h(w.reviewed_at.slice(0,16).replace('T',' '))+' · '+h(nameOf(S.teachers,w.reviewed_by))+'</span>':'<span class="note">저장하면 "첨삭 완료"로 바뀝니다.</span>')+'</div></div>';
+}
+function gaPublishPanel(w,s){
+  const ym=(w.date||'').slice(0,7);const other=S.archive_writings.find(x=>x.student_id===w.student_id&&x.id!==w.id&&x.featured===ym);const st=gaStatusOf(w);
+  const logs=S.archive_log.filter(l=>l.target_id===w.id).slice(-5).reverse();
+  return '<div class="panel ga-form"><h2>발행 <span class="note">월간 포트폴리오 · 학부모 공개</span></h2>'+
+  '<div class="row"><div><div class="note">'+h(gaYmK(ym))+' 대표작</div>'+(w.featured===ym?badge('b-good','★ 이달의 대표작')+' <button class="btn s" data-act="gaFeature" data-w="'+h(w.id)+'">해제</button>':'<button class="btn" data-act="gaFeature" data-w="'+h(w.id)+'">★ 이달의 대표작으로</button>'+(other?' <span class="note">현재 대표작: '+h(other.title)+' (바뀝니다)</span>':''))+'</div>'+
+  '<div><div class="note">학부모 공개</div>'+badge(GA_APPR_CLS[w.approval||'NONE'],GA_APPR[w.approval||'NONE'])+' '+
+  (w.approval==='APPROVED'?'<button class="btn s" data-act="gaUnpublish" data-w="'+h(w.id)+'">공개 취소</button>':w.approval==='PENDING'?(isDirector()?'<button class="btn s p" data-act="gaApprove" data-w="'+h(w.id)+'">승인</button> <button class="btn s" data-act="gaReject" data-w="'+h(w.id)+'">보류</button>':'<span class="note">원장 승인을 기다립니다</span>'):(isDirector()?'<button class="btn s p" data-act="gaApprove" data-w="'+h(w.id)+'">바로 승인</button>':'<button class="btn s" data-act="gaApprovalRequest" data-w="'+h(w.id)+'"'+(st==='ORIGINAL'?' disabled title="첨삭 저장 후 요청할 수 있습니다"':'')+'>공개 승인 요청</button>'))+
+  (st==='ORIGINAL'?'<div class="note">첨삭·평가를 저장해야 공개를 요청할 수 있습니다.</div>':'')+'</div></div>'+
+  (logs.length?'<div class="note" style="margin-top:10px">'+logs.map(l=>h((l.at||'').slice(0,10))+' '+h(l.by_name||'')+' · '+h({FEATURE:'대표작 선정',UNFEATURE:'대표작 해제',REQUEST:'공개 요청',APPROVE:'승인',REJECT:'보류',UNPUBLISH:'공개 취소',DELETE:'삭제',REVIEW:'평가 저장'}[l.type]||l.type)+(l.note?' — '+h(l.note):'')).join('<br>')+'</div>':'')+'</div>';
+}
+function gaViewWriting(s,q){
+  const w=gaWriting(q.w);if(!w||w.student_id!==s.id)return notFound('작품');const st=gaStatusOf(w);const avg=rubricAvg(w.rubric);
+  const reading=w.reading_id?gaReading(w.reading_id):null;const sessLink=w.session_id?'<a class="note" href="#/student/'+s.id+'">세션 '+h(w.date)+'</a>':'';
+  return '<div class="ga">'+gaStudentHead(s,'<a class="btn" href="#/archive/'+s.id+'?tab=writing">← 작품 목록</a>')+
+  '<div class="ga-title"><div class="ga-kicker">'+h(w.project||'')+(w.textbook?' · '+h(w.textbook):'')+'</div><h2 class="ga-h2">'+h(w.title)+'</h2><div class="flags">'+badge(GA_W_CLS[st],GA_W_ST[st])+(avg!=null?badge('b-brass','루브릭 평균 '+avg):'')+(w.featured?badge('b-good','★ '+h(gaYmK(w.featured))+' 대표작'):'')+badge(GA_APPR_CLS[w.approval||'NONE'],GA_APPR[w.approval||'NONE'])+'<span class="note">'+h(w.date||'')+(reading?' · 📖 '+h(reading.title):'')+(w.source==='SESSION'?' · 세션 입력에서 자동 생성':'')+'</span></div></div>'+
+  '<div class="ga-vers">'+['ORIGINAL','REVISED','FINAL'].map(k=>gaVersionCol(w,k)).join('')+'</div>'+
+  '<div class="grid g2" style="margin-top:14px">'+gaRubricPanel(w)+gaPublishPanel(w,s)+'</div>'+
+  '<details class="panel"><summary class="note" style="cursor:pointer">작품 정보 수정 · 삭제</summary><div class="row" style="margin-top:10px"><label class="f" style="flex:2;min-width:200px">제목<input type="text" id="ge_title" value="'+h(w.title)+'" style="width:100%"></label><label class="f">프로젝트'+gaProjectSelect('ge_project',w.project||'')+'<input type="text" id="ge_project_new" placeholder="새 프로젝트 이름" hidden style="margin-top:4px"></label><label class="f">연결 원서'+gaReadingSelect('ge_reading',s.id,w.reading_id||'')+'</label><label class="f">날짜<input type="date" id="ge_date" value="'+h(w.date||'')+'"></label></div>'+
+  '<div class="bar" style="margin-top:10px"><button class="btn p" data-act="gaWritingSave" data-w="'+h(w.id)+'">저장</button><span class="sp"></span><button class="btn d" data-act="gaWritingDel" data-w="'+h(w.id)+'">작품 삭제</button></div></details>'+
+  '<div id="gaLightbox" class="ga-lb" hidden data-act="gaLbClose"><img alt="작품"></div></div>';
+}
+
+// ===== 6. 동작 (ACT) ==========================================================
+const GA_PENDING={new:[]};
+function gaReadTags(prefix){const t=[...document.querySelectorAll('.'+prefix+':checked')].map(x=>x.value);const extra=$('#'+prefix+'_new');if(extra&&extra.value.trim())for(const x of extra.value.split(',').map(y=>y.trim()).filter(Boolean))if(!t.includes(x))t.push(x);return t;}
+function gaProjectValue(selId,newId){const sel=$('#'+selId);if(!sel)return '';if(sel.value==='__new'){const n=$('#'+newId);return n?n.value.trim():'';}return sel.value;}
+async function gaCollectFiles(fileList,sid){
+  const out=[];for(const f of fileList){if(!f)continue;const isPdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');if(!isPdf&&!/^image\//.test(f.type||'')){toast('사진 또는 PDF만 올릴 수 있습니다: '+(f.name||''));continue;}
+    if(isPdf){if(f.size>GA_MAX_FILE){toast('PDF가 너무 큽니다 (25 MB 이하): '+f.name);continue;}out.push({blob:f,mime:'application/pdf',name:f.name||'document.pdf'});}
+    else{const b=await shrinkImage(f,1800);out.push({blob:b,mime:'image/jpeg',name:f.name||'photo.jpg'});}}
+  return out;
+}
+Object.assign(ACT,{
+  // --- Reading Record ---
+  gaReadingSave(el){
+    const sid=el.dataset.sid;const s=studentOf(sid);if(!s)return;const title=$('#gr_title').value.trim();if(!title){toast('원서 제목을 입력하세요.');$('#gr_title').focus();return;}
+    const series=$('#gr_series').value.trim();const arv=$('#gr_ar').value;const ar=arv===''?null:num(arv,null);const date=$('#gr_date').value||todayISO();const status=(document.querySelector('input[name="gr_status"]:checked')||{}).value||'READING';
+    const tags=gaReadTags('gr_tag');const cat=gaCatalogUpsert(title,series,ar);const a=gaMeta();for(const t of tags)if(!a.tags.includes(t))a.tags.push(t);
+    let r=el.dataset.id?gaReading(el.dataset.id):null;const dup=S.archive_readings.find(x=>x.student_id===sid&&normName(x.title)===normName(title)&&(!r||x.id!==r.id));
+    if(!r&&dup){r=dup;toast('같은 원서 기록이 있어 그 기록을 갱신했습니다.');}
+    if(!r){r={id:'ar_'+gaId(sid)+'_'+(slug(title)||gaId(title)).slice(0,60),academy_id:gaAcademy(),student_id:sid,teacher_id:myId(s.homeroom_teacher_id),location_id:s.location_id,title:cat.title,series,ar_level:ar,status,date,last_date:date,done_date:status==='DONE'?date:null,dates:[date],session_ids:[],tags,response:'',booktalk:'',booktalk_url:'',source:'MANUAL',created_at:nowISO(),updated_at:nowISO()};if(gaReading(r.id))r.id=uid('ar');S.archive_readings.push(r);}
+    else{r.title=cat.title;r.series=series;r.ar_level=ar;r.dates=r.dates||[];if(!r.dates.includes(date))r.dates.push(date);const ds=gaReadingDates(r);r.date=ds[0];r.last_date=ds[ds.length-1];if(status==='DONE'&&r.status!=='DONE')r.done_date=date;if(status!=='DONE')r.done_date=null;r.status=status;r.tags=tags;}
+    r.response=$('#gr_resp').value.trim();r.booktalk=$('#gr_talk').value.trim();r.booktalk_url=$('#gr_url').value.trim();r.updated_at=nowISO();r.updated_by=myId(null);
+    persist();toast(el.dataset.id?'독서 기록 수정됨':'독서 기록 저장됨');nav('archive',sid,{tab:'reading'});
+  },
+  async gaReadingDel(el){const r=gaReading(el.dataset.id);if(!r)return;if(!await ask('「'+r.title+'」 독서 기록을 삭제할까요? 연결된 작품은 남고 원서 연결만 풀립니다.'))return;
+    S.archive_readings=S.archive_readings.filter(x=>x.id!==r.id);for(const w of S.archive_writings)if(w.reading_id===r.id){w.reading_id=null;}gaLog('DELETE','READING',r.id,r.student_id,r.title);persist();toast('삭제됨');nav('archive',r.student_id,{tab:'reading'});},
+  // --- Writing Studio ---
+  async gaWritingCreate(el){
+    const sid=el.dataset.sid;const s=studentOf(sid);if(!s)return;const title=$('#gw_title').value.trim();if(!title){toast('작품 제목을 입력하세요.');$('#gw_title').focus();return;}
+    const text=$('#gw_text').value.trim();const files=GA_PENDING.new||[];if(!files.length&&!text){toast('사진·PDF를 올리거나 텍스트를 입력하세요.');return;}
+    const project=gaProjectValue('gw_project','gw_project_new')||'Book Writing';const a=gaMeta();if(!a.projects.includes(project))a.projects.push(project);
+    const readingId=$('#gw_reading').value||null;const reading=readingId?gaReading(readingId):null;const date=$('#gw_date').value||todayISO();
+    const w={id:uid('aw'),academy_id:gaAcademy(),student_id:sid,teacher_id:myId(s.homeroom_teacher_id),location_id:s.location_id,date,title,project,reading_id:reading?reading.id:null,book_title:reading?reading.title:'',session_id:null,track_id:null,textbook:'',rubric:null,checks:[],evidence:null,feedback:'',growth_comment:'',featured:null,approval:'NONE',approved_by:null,approved_at:null,reviewed_at:null,source:'MANUAL',created_at:nowISO(),updated_at:nowISO()};
+    S.archive_writings.push(w);const v=gaVersionEnsure(w.id,'ORIGINAL');v.text=text;persist();
+    el.disabled=true;el.textContent='저장 중…';let fail=0;
+    for(const pf of files){try{const f=await gaSaveFile(sid,pf.blob,pf.mime,pf.name);v.files.push(f.id);persist();}catch(e){console.error(e);fail++;toast('파일 저장 실패: '+e.message);}}
+    GA_PENDING.new=[];toast('원본 저장됨'+(fail?' · 파일 '+fail+'개 실패':''));nav('archive',sid,{tab:'writing',w:w.id});
+  },
+  gaWritingSave(el){const w=gaWriting(el.dataset.w);if(!w)return;const title=$('#ge_title').value.trim();if(!title){toast('제목을 입력하세요.');return;}
+    const project=gaProjectValue('ge_project','ge_project_new')||w.project;const a=gaMeta();if(project&&!a.projects.includes(project))a.projects.push(project);
+    const rid=$('#ge_reading').value||null;const r=rid?gaReading(rid):null;w.title=title;w.project=project;w.reading_id=r?r.id:null;w.book_title=r?r.title:'';w.date=$('#ge_date').value||w.date;w.updated_at=nowISO();persist();toast('작품 정보 저장됨');render();},
+  async gaWritingDel(el){const w=gaWriting(el.dataset.w);if(!w)return;if(!await ask('「'+w.title+'」 작품과 모든 버전·파일을 삭제할까요? 되돌릴 수 없습니다.'))return;
+    const vs=gaVersions(w.id);const fids=[];for(const v of vs)for(const fid of (v.files||[]))fids.push(fid);
+    for(const fid of fids){const f=gaFile(fid);if(!f)continue;const used=S.archive_versions.some(v=>v.writing_id!==w.id&&(v.files||[]).includes(fid));if(used)continue;await gaRemoveRemote(f);S.archive_files=S.archive_files.filter(x=>x.id!==fid);}
+    S.archive_versions=S.archive_versions.filter(v=>v.writing_id!==w.id);S.archive_writings=S.archive_writings.filter(x=>x.id!==w.id);gaLog('DELETE','WRITING',w.id,w.student_id,w.title);persist();toast('작품 삭제됨');nav('archive',w.student_id,{tab:'writing'});},
+  gaVersionText(el){const w=gaWriting(el.dataset.w);if(!w)return;const kind=el.dataset.kind;const ta=$('#gv_text_'+kind);if(!ta)return;const v=gaVersionEnsure(w.id,kind);v.text=ta.value.trim();v.updated_at=nowISO();v.updated_by=myId(null);w.updated_at=nowISO();persist();toast(GA_VKIND[kind]+' 텍스트 저장됨');render();},
+  async gaFileDel(el){const f=gaFile(el.dataset.file);const w=gaWriting(el.dataset.w);if(!f||!w)return;if(!await ask('이 파일을 삭제할까요?'))return;
+    const v=gaVersion(w.id,el.dataset.kind);if(v)v.files=(v.files||[]).filter(x=>x!==f.id);const used=S.archive_versions.some(x=>(x.files||[]).includes(f.id));if(!used){await gaRemoveRemote(f);S.archive_files=S.archive_files.filter(x=>x.id!==f.id);}persist();toast('파일 삭제됨');render();},
+  gaReviewSave(el){const w=gaWriting(el.dataset.w);if(!w)return;
+    const rb={};for(const [k] of RUBRIC){const v=$('#ga_rb_'+k).value;rb[k]=v===''?null:num(v);}const any=Object.values(rb).some(v=>v!=null);w.rubric=any?rb:null;
+    w.checks=[...document.querySelectorAll('.ga_chk:checked')].map(x=>x.value);const n=$('#ga_ev_n').value,e=$('#ga_ev_e').value;w.evidence={sentences:n===''?null:num(n),errors:e===''?null:num(e),ideas:w.checks.slice(),own:!!$('#ga_own').checked};
+    w.feedback=$('#ga_fb').value.trim();w.growth_comment=$('#ga_gc').value.trim();w.reviewed_at=nowISO();w.reviewed_by=myId(null);w.updated_at=nowISO();
+    gaLog('REVIEW','WRITING',w.id,w.student_id,any?'평균 '+rubricAvg(rb):'');persist();toast('평가 저장됨 · 첨삭 완료');render();},
+  gaRubricCalc(el){const target=num(el.dataset.target,8);const n=$('#ga_ev_n').value,e=$('#ga_ev_e').value;const ideas=document.querySelectorAll('.ga_chk:checked').length;const own=$('#ga_own').checked;
+    if(n===''){toast('총 문장 수를 먼저 입력하세요.');$('#ga_ev_n').focus();return;}$('#ga_rb_acc').value=scoreAccuracy(n,e===''?0:e);$('#ga_rb_expr').value=scoreExpression(n,target,own);$('#ga_rb_idea').value=scoreIdea(ideas);toast('자동 계산됨 — 직접 고칠 수 있습니다 (저장을 눌러야 반영)');},
+  gaRubricHelp(){const b=$('#gaRbHelp');if(b)b.hidden=!b.hidden;},
+  gaFeature(el){const w=gaWriting(el.dataset.w);if(!w)return;const ym=(w.date||'').slice(0,7);if(!ym){toast('작품 날짜가 없습니다.');return;}
+    if(w.featured===ym){w.featured=null;gaLog('UNFEATURE','WRITING',w.id,w.student_id,gaYmK(ym));toast('대표작 해제');}
+    else{for(const x of S.archive_writings)if(x.student_id===w.student_id&&x.featured===ym&&x.id!==w.id)x.featured=null;w.featured=ym;gaLog('FEATURE','WRITING',w.id,w.student_id,gaYmK(ym)+' · '+w.title);toast(gaYmK(ym)+' 대표작으로 선정');}
+    w.updated_at=nowISO();persist();render();},
+  gaApprovalRequest(el){const w=gaWriting(el.dataset.w);if(!w)return;if(gaStatusOf(w)==='ORIGINAL'){toast('첨삭·평가를 먼저 저장하세요.');return;}w.approval='PENDING';w.updated_at=nowISO();gaLog('REQUEST','WRITING',w.id,w.student_id,w.title);persist();toast('공개 승인을 요청했습니다 (원장 결정)');render();},
+  gaApprove(el){if(!isDirector()){toast('원장만 승인할 수 있습니다.');return;}const w=gaWriting(el.dataset.w);if(!w)return;w.approval='APPROVED';w.approved_by=myId(null);w.approved_at=nowISO();w.updated_at=nowISO();gaLog('APPROVE','WRITING',w.id,w.student_id,w.title);persist();toast('학부모 공개 승인됨');render();},
+  gaReject(el){if(!isDirector()){toast('원장만 결정할 수 있습니다.');return;}const w=gaWriting(el.dataset.w);if(!w)return;w.approval='REJECTED';w.updated_at=nowISO();gaLog('REJECT','WRITING',w.id,w.student_id,w.title);persist();toast('보류 처리됨');render();},
+  async gaUnpublish(el){const w=gaWriting(el.dataset.w);if(!w)return;if(!await ask('학부모 공개를 취소할까요?'))return;w.approval='NONE';w.approved_by=null;w.approved_at=null;w.updated_at=nowISO();gaLog('UNPUBLISH','WRITING',w.id,w.student_id,w.title);persist();toast('공개 취소됨');render();},
+  async gaOpen(el){const f=gaFile(el.dataset.file);if(!f)return;const url=el.dataset.url||await gaFileUrl(f);if(!url){toast('이 파일은 다른 기기에 저장되어 있습니다. 공유 저장소에 올라오면 보입니다.');return;}
+    if(f.kind==='pdf'){window.open(url,'_blank');return;}const lb=$('#gaLightbox');if(!lb){window.open(url,'_blank');return;}lb.querySelector('img').src=url;lb.hidden=false;},
+  gaLbClose(){const lb=$('#gaLightbox');if(lb)lb.hidden=true;},
+  // --- 설정 · 저장소 ---
+  gaSettingsSave(){const a=gaMeta();const ps=$('#ga_projects').value.split(',').map(x=>x.trim()).filter(Boolean);const ts=$('#ga_tags').value.split(',').map(x=>x.trim()).filter(Boolean);if(ps.length)a.projects=[...new Set(ps)];if(ts.length)a.tags=[...new Set(ts)];persist();toast('저장됨');render();},
+  async gaBucketCheck(){if(!cloudAuthed()){toast('공유 저장소에 먼저 로그인하세요.');return;}toast('확인 중…');const ok=await gaBucketCheck(true);toast(ok?'전용 버킷 확인됨 · 새 파일은 버킷에 저장':'버킷이 없어 공유 DB에 저장합니다 (정상 작동)');render();},
+  gaSync(){if(!cloudAuthed()){toast('공유 저장소에 먼저 로그인하세요.');return;}toast('올리는 중…');gaSyncPending();},
+  gaCopySql(){copyText(GA_SQL);}
+});
+
+// ===== 7. 입력 이벤트 (파일 선택 · 제목 자동 채움 · 프로젝트 직접 입력) ========
+document.addEventListener('change',async e=>{const el=e.target;if(!el||!el.classList)return;
+  if(el.classList.contains('ga-newfile')){const files=await gaCollectFiles([...el.files],null);GA_PENDING.new=(GA_PENDING.new||[]).concat(files);const pv=$('#gw_prev');if(pv)pv.innerHTML=GA_PENDING.new.map((f,i)=>f.mime==='application/pdf'?'<div class="ga-pdf">📄 '+h(f.name)+'<small class="note">'+gaSizeK(f.blob.size)+'</small></div>':'<figure class="ga-fthumb"><img src="'+URL.createObjectURL(f.blob)+'" alt="미리보기"></figure>').join('')+(GA_PENDING.new.length?'<div class="note" style="width:100%">'+GA_PENDING.new.length+'개 선택 · "원본으로 저장"을 누르면 올라갑니다</div>':'');el.value='';return;}
+  if(el.classList.contains('ga-vfile')){const w=gaWriting(el.dataset.w);if(!w)return;const kind=el.dataset.kind;const files=await gaCollectFiles([...el.files],w.student_id);el.value='';if(!files.length)return;
+    toast('저장 중… '+files.length+'개');const v=gaVersionEnsure(w.id,kind);let fail=0;for(const pf of files){try{const f=await gaSaveFile(w.student_id,pf.blob,pf.mime,pf.name);v.files.push(f.id);persist();}catch(err){console.error(err);fail++;toast('파일 저장 실패: '+err.message);}}
+    w.updated_at=nowISO();persist();toast(GA_VKIND[kind]+' 저장됨'+(fail?' · 실패 '+fail:''));render();return;}
+  if(el.classList.contains('ga-title')){const cat=gaCatalog(el.value.trim());if(!cat)return;const se=$('#gr_series'),ar=$('#gr_ar');if(se&&!se.value&&cat.series)se.value=cat.series;if(ar&&ar.value===''&&cat.ar_level!=null)ar.value=cat.ar_level;return;}
+  if(el.id==='gw_project'||el.id==='ge_project'){const n=$('#'+el.id+'_new');if(n){n.hidden=el.value!=='__new';if(!n.hidden)n.focus();}return;}
+});
+
+// ===== 8. 스타일 =============================================================
+function gaInjectCss(){
+  if($('#ga-css'))return;const st=document.createElement('style');st.id='ga-css';st.textContent=`
+:root{--ga-ivory:#f7f4ec;--ga-ivory-2:#fdfcf8;--ga-sage:#6b8c78;--ga-sage-ink:#466654;--ga-sage-soft:#e6eee8;--ga-line:#dcd6c9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ga-ivory:#1a2028;--ga-ivory-2:#202833;--ga-sage:#8fb49e;--ga-sage-ink:#b7d3c3;--ga-sage-soft:#213029;--ga-line:#2c3744}}
+:root[data-theme="dark"]{--ga-ivory:#1a2028;--ga-ivory-2:#202833;--ga-sage:#8fb49e;--ga-sage-ink:#b7d3c3;--ga-sage-soft:#213029;--ga-line:#2c3744}
+.ga .ga-kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ga-sage-ink);font-weight:600;margin-bottom:4px}
+.ga-hero{display:flex;gap:24px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;background:var(--ga-ivory);border:1px solid var(--ga-line);border-radius:10px;padding:22px 24px;margin-bottom:16px}
+.ga-hero h1{font-size:30px;margin:0}
+.ga-hero-n,.ga-strip{display:flex;gap:4px;flex-wrap:wrap}
+.ga-hero-n>div,.ga-strip>div{min-width:92px;padding:8px 12px;border-left:1px solid var(--ga-line)}
+.ga-hero-n b,.ga-strip b{display:block;font-family:'Fraunces',Georgia,serif;font-size:26px;font-weight:600;color:var(--title);line-height:1.1}
+.ga-hero-n small,.ga-strip small{font-size:12px;color:var(--muted)}
+.ga-strip{margin:0 0 14px}
+.ga-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px}
+.ga-card{display:block;background:var(--ga-ivory-2);border:1px solid var(--ga-line);border-radius:10px;padding:14px 16px;color:var(--ink);text-decoration:none;transition:border-color .15s,transform .15s}
+.ga-card:hover{border-color:var(--ga-sage);transform:translateY(-1px)}
+.ga-card-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.ga-card-h .nm{font-family:'Fraunces',Georgia,serif;font-size:19px;font-weight:600;color:var(--title)}
+.ga-card-h .ga-time{margin-left:auto;font-size:12px;color:var(--muted)}
+.ga-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:6px 0 8px}
+.ga-nums b{display:block;font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:600;color:var(--ga-sage-ink);line-height:1.1}
+.ga-nums small{font-size:11px;color:var(--muted)}
+.ga-last{margin-top:8px;border-top:1px solid var(--line-2);padding-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ga-last span{opacity:.7}
+.ga-setup summary{list-style:none;cursor:pointer}.ga-setup summary::-webkit-details-marker{display:none}
+.ga-form{background:var(--ga-ivory)}
+.ga .chip-opt input:checked+span{background:var(--ga-sage);border-color:var(--ga-sage);color:#fff}
+.ga .tabs a.on{background:var(--ga-sage-ink);border-color:var(--ga-sage-ink)}
+.ga-shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:10px}
+.ga-cover{position:relative;aspect-ratio:3/4;display:flex;flex-direction:column;border-radius:4px 8px 8px 4px;background:linear-gradient(165deg,var(--ga-ivory-2),var(--ga-ivory));border:1px solid var(--ga-line);box-shadow:inset 7px 0 0 var(--ga-sage),0 1px 2px rgba(0,0,0,.06);padding:14px 12px 12px 20px;color:var(--ink);text-decoration:none;transition:transform .15s,box-shadow .15s}
+.ga-cover:hover{transform:translateY(-2px);box-shadow:inset 7px 0 0 var(--ga-sage),0 6px 14px rgba(0,0,0,.1)}
+.ga-cover.st-READING{box-shadow:inset 7px 0 0 var(--brass),0 1px 2px rgba(0,0,0,.06)}.ga-cover.st-PAUSED{box-shadow:inset 7px 0 0 var(--line),0 1px 2px rgba(0,0,0,.06)}
+.ga-cover .t{font-family:'Fraunces',Georgia,serif;font-size:16px;line-height:1.25;font-weight:600;color:var(--title);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.ga-cover .s{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.ga-cover .tg{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.ga-cover .tg span{font-size:11px;color:var(--ga-sage-ink);background:var(--ga-sage-soft);border-radius:999px;padding:1px 7px}
+.ga-cover .f{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;padding-top:8px}
+.ga-cover .ar{font-family:'Fraunces',Georgia,serif;font-size:22px;color:var(--ga-sage-ink);font-weight:600;line-height:1}
+.ga-month{margin:16px 0 8px;font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;color:var(--title);border-bottom:1px solid var(--ga-line);padding-bottom:4px}
+.ga-works{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.ga-work{display:flex;flex-direction:column;background:var(--ga-ivory-2);border:1px solid var(--ga-line);border-radius:8px;overflow:hidden;color:var(--ink);text-decoration:none;transition:transform .15s,border-color .15s}
+.ga-work:hover{transform:translateY(-2px);border-color:var(--ga-sage)}
+.ga-work .ph{position:relative;aspect-ratio:4/3;background:var(--ga-ivory);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ga-work .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ga-work .ph .q{font-family:'Fraunces',Georgia,serif;font-size:64px;color:var(--ga-sage);opacity:.35;line-height:1}
+.ga-work .b{padding:10px 12px 12px}
+.ga-work .t{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:15px;line-height:1.3;color:var(--title)}
+.ga-work .m{font-size:12px;color:var(--muted);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+.ga-star{position:absolute;top:8px;right:10px;color:var(--brass);font-size:20px;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.ga-fig .ga-miss{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--muted);padding:8px;background:var(--ga-ivory)}
+.ga-fig.ga-missing .ga-miss{display:flex}.ga-fig.ga-missing img{visibility:hidden}
+.ga-title{margin:4px 0 14px}.ga-h2{font-size:26px;margin:2px 0 8px}
+.ga-vers{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.ga-ver{border:1px solid var(--ga-line);border-radius:10px;padding:14px;background:var(--ga-ivory-2)}
+.ga-ver-original{border-left:4px solid var(--brass)}.ga-ver-revised{border-left:4px solid var(--info)}.ga-ver-final{border-left:4px solid var(--ga-sage)}
+.ga-ver h3{margin:0 0 4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ga-sage-ink)}
+.ga-files{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.ga-fthumb{position:relative;margin:0;width:118px;height:118px}
+.ga-fthumb img{width:118px;height:118px;object-fit:cover;border-radius:6px;border:1px solid var(--ga-line);display:block;cursor:zoom-in;background:var(--ga-ivory)}
+.ga-fdel{position:absolute;top:4px;right:4px;padding:0 6px;font-size:11px;background:var(--surface-2)}
+.ga-pdf{display:flex;align-items:center;gap:8px;border:1px solid var(--ga-line);border-radius:6px;padding:6px 10px;background:var(--ga-ivory);font-size:13px}
+.ga-lb{position:fixed;inset:0;background:rgba(10,12,16,.88);display:flex;align-items:center;justify-content:center;z-index:30;cursor:zoom-out;padding:20px}
+.ga-lb[hidden]{display:none}
+.ga-lb img{max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+@media (max-width:640px){.ga-hero{padding:16px}.ga-hero h1{font-size:24px}.ga-hero-n>div,.ga-strip>div{min-width:72px;padding:6px 8px}.ga-nums{grid-template-columns:repeat(4,1fr)}.ga-shelf{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}.ga-works{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+@media print{.ga-form,.ga-setup,.tabs{display:none!important}}
+`;document.head.appendChild(st);
+}
+
+// ===== 9. 기존 OS에 연결 ======================================================
+gaInjectCss();
+for(const k of GA_KEYS)if(!MERGE_COLLECTIONS.includes(k))MERGE_COLLECTIONS.push(k);
+Object.assign(ROUTES,{archive:gaView});
+const gaNavAdd=arr=>{if(arr.some(x=>x[0]==='archive'))return;const i=arr.findIndex(x=>x[0]==='students');arr.splice(i<0?arr.length:i+1,0,['archive','아카이브']);};
+gaNavAdd(NAV_TEACHER);gaNavAdd(NAV_DIRECTOR);
+// 세션 저장 → 아카이브 자동 적재
+const _gaSaveSession=saveSession;saveSession=function(d){const r=_gaSaveSession(d);try{if(r&&r.session&&gaIngestSession(r.session))persist();}catch(e){console.error('growth-archive ingest',e);}return r;};
+// 세션 사진 첨부 → 아카이브 파일로도 등록·업로드
+const _gaAttach=attachPhotos;attachPhotos=function(sess,acts){const copy=acts.map(a=>({track_id:a.track_id,photo_blob:a.photo_blob}));_gaAttach(sess,acts);try{if(gaIngestSession(sess))persist();gaUploadLegacy(sess,copy);}catch(e){console.error('growth-archive attach',e);}};
+// 공유 저장소에서 내려받은 상태에도 컬렉션 보장
+const _gaMigrate=migrate;migrate=function(s){const r=_gaMigrate(s);return r?gaEnsure(r):r;};
+// 화면에 그려진 아카이브 이미지에 주소 채우기
+const _gaHydratePhotos=hydratePhotos;hydratePhotos=async function(){try{await _gaHydratePhotos();}catch(e){console.error(e);}try{await gaHydrate();}catch(e){console.error(e);}};
+// 상태가 준비되면: 컬렉션 보장 → 기존 세션 기록 백필(멱등 · id가 세션 기준이라 여러 기기에서 돌아도 하나로 합쳐짐) → 파일 동기화
+function gaInit(){
+  gaEnsure(S);
+  try{if(gaBackfill())persist();}catch(e){console.error('growth-archive backfill',e);}
+  setTimeout(()=>{gaBucketCheck();gaSyncPending();},5000);setInterval(gaSyncPending,60000);window.addEventListener('online',()=>setTimeout(gaSyncPending,3000));
+  try{if(route().name==='archive')render();else renderNav();}catch(e){console.error(e);}
+}
+if(S)gaInit();else document.addEventListener('epl:ready',gaInit,{once:true});
+window.GA={ensure:gaEnsure,ingest:gaIngestSession,backfill:gaBackfill,onSessionDeleted:gaOnSessionDeleted,stats:gaStats,readings:gaReadings,writings:gaWritings,versions:gaVersions,files:()=>S.archive_files,status:gaStatusOf,sync:gaSyncPending,bucket:gaBucketCheck,saveFile:gaSaveFile,SQL:GA_SQL};
+})();
 </script>
 </body>
 </html>
