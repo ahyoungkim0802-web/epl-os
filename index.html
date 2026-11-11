@@ -676,7 +676,7 @@ const DEFAULT_ENTRY_DEADLINE='20:30';
 // 버전 번호를 올리지 않는 보강 — 어느 기기에서 열어도(옛 빌드 포함) 같은 데이터가 그대로 읽히게 한다
 function ensureCore(st){
   if(!st||typeof st!=='object')return st;
-  if(!Array.isArray(st.sessions_void))st.sessions_void=[];if(!Array.isArray(st.points_paid))st.points_paid=[];
+  if(!Array.isArray(st.sessions_void))st.sessions_void=[];if(!Array.isArray(st.points_paid))st.points_paid=[];if(!Array.isArray(st.prospects))st.prospects=[];
   for(const l of (st.locations||[]))if(!l.entry_deadline)l.entry_deadline=DEFAULT_ENTRY_DEADLINE;
   st.meta=st.meta||{};ensureHwLineInTemplate(st.meta);
   if(Array.isArray(st.authority_rules)){const have=new Set(st.authority_rules.map(r=>r.code));for(const r of seedAuthority())if(!have.has(r.code))st.authority_rules.push(r);}
@@ -751,7 +751,7 @@ async function cloudPull(){if(!cloudAuthed())throw new Error('로그인 필요')
 const DIRTY_KEY='epl_dirty';
 function dirtySet(on){try{if(on)localStorage.setItem(DIRTY_KEY,String(Date.now()));else localStorage.removeItem(DIRTY_KEY);}catch(e){}}
 function dirtyGet(){try{return localStorage.getItem(DIRTY_KEY);}catch(e){return null;}}
-const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules','sessions_void','points_paid'];
+const MERGE_COLLECTIONS=['students','teachers','locations','books','tracks','sessions','alerts','events','approvals','manuals','assessments','chart_notes','monthly_reports','overrides','completion_tests','original_books','issues','stock','authority_rules','sessions_void','points_paid','prospects'];
 function mergeStates(remote,local){
   // 이 기기에 올리지 못한 변경이 있을 때: id 기준 합집합, 같은 id는 이 기기 것 우선
   const out=Object.assign({},remote);
@@ -1524,23 +1524,23 @@ function scheduleForm(s){
   return '<label class="f">등원 요일<div class="radios">'+days.map(d=>'<label><input type="checkbox" class="wd" value="'+d+'"'+(has(d)?' checked':'')+'>'+WD[d]+'</label>').join('')+'</div></label><label class="f">등원 시간<input type="time" id="sf_time" value="'+h(time)+'"></label>';
 }
 function bookPick(cat){const bs=S.books.filter(b=>b.category===cat&&b.active).sort((a,c)=>{const ga=gridOf(a),gc=gridOf(c);return (ga.length?ga[0].level*10+ga[0].season:99)-(gc.length?gc[0].level*10+gc[0].season:99)||a.book_name.localeCompare(c.book_name,'ko');});return '<label class="f">'+CAT_S[cat]+' 교재<select id="sf_b_'+cat+'"><option value="">— 나중에 —</option>'+opt(bs,'',b=>b.book_name)+'</select></label><label class="f">지금 할 Unit<input type="number" id="sf_u_'+cat+'" min="1" value="1" style="width:70px"></label>';}
-function studentForm(s){
-  const v=k=>s?h(s[k]):'';
+function studentForm(s,pre){
+  const v=k=>s?h(s[k]):(pre&&pre[k]!=null?h(pre[k]):'');
   return '<div class="row"><label class="f">이름<input type="text" id="sf_name" value="'+v('name')+'"></label><label class="f">학년<input type="text" id="sf_grade" value="'+v('grade')+'" placeholder="5학년" style="width:80px"></label>'+
-  '<label class="f">지점<select id="sf_loc">'+opt(S.locations,s?s.location_id:S.locations[0].id)+'</select></label>'+
-  '<label class="f">현재 AR <span class="note">(바꾸면 AR 평가 기록에 추가)</span><input type="number" step="0.1" id="sf_ar" value="'+(s?h(s.ar_level):'')+'"></label>'+
+  '<label class="f">지점<select id="sf_loc">'+opt(S.locations,s?s.location_id:(pre&&pre.location_id)||S.locations[0].id)+'</select></label>'+
+  '<label class="f">현재 AR <span class="note">(바꾸면 AR 평가 기록에 추가)</span><input type="number" step="0.1" id="sf_ar" value="'+(s?h(s.ar_level):(pre&&pre.ar_level!=null?h(pre.ar_level):''))+'"></label>'+
   '<label class="f">입회일<input type="date" id="sf_enr" value="'+h(s?(s.enrolled_at||''):todayISO())+'"></label>'+
-  '<label class="f">학부모 연락처<input type="text" id="sf_phone" value="'+h(s?(s.guardian_phone||''):'')+'" placeholder="010-0000-0000" style="width:150px"></label>'+
+  '<label class="f">학부모 연락처<input type="text" id="sf_phone" value="'+h(s?(s.guardian_phone||''):(pre&&pre.guardian_phone)||'')+'" placeholder="010-0000-0000" style="width:150px"></label>'+
   '<label class="f">담임<select id="sf_tch">'+opt(S.teachers,s?s.homeroom_teacher_id:S.teachers[0].id)+'</select></label>'+
   (s?'<label class="f">상태<select id="sf_status"><option value="ACTIVE"'+(s.status==='ACTIVE'?' selected':'')+'>재원</option><option value="PAUSED"'+(s.status==='PAUSED'?' selected':'')+'>휴원</option><option value="WITHDRAWN"'+(s.status==='WITHDRAWN'?' selected':'')+'>퇴원</option></select></label>':'')+
-  '</div><div class="row" style="margin-top:10px">'+scheduleForm(s)+'</div>'+(s?'':'<div class="row" style="margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px">'+CATS.map(bookPick).join('')+'</div><p class="note" style="margin:6px 0 0">노션의 리딩·문법·라이팅·단어 교재 칸과 같습니다. 지금 할 Unit = 다음 등원 때 진행할 Unit. 나중에 바꿀 수 있습니다.</p>')+'';
+  (pre?'<input type="hidden" id="sf_from" value="'+h(pre.id)+'">':'')+'</div><div class="row" style="margin-top:10px">'+scheduleForm(s)+'</div>'+(s?'':'<div class="row" style="margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px">'+CATS.map(bookPick).join('')+'</div><p class="note" style="margin:6px 0 0">노션의 리딩·문법·라이팅·단어 교재 칸과 같습니다. 지금 할 Unit = 다음 등원 때 진행할 Unit. 나중에 바꿀 수 있습니다.</p>')+'';
 }
 function viewStudents(q){
   const rows=S.students.slice().sort((a,b)=>(a.status===b.status?0:a.status==='ACTIVE'?-1:1)||a.name.localeCompare(b.name,'ko'));
   const cell=(s)=>{const trs=activeTracks(s.id);if(!trs.length)return '<span class="note">미설정</span>';const def=defaultTrack(s);return trs.map(t=>{const b=bookOf(t);return '<div>'+(def&&t.id===def.id?'★ ':'')+h(b.book_name)+' '+(t.next_unit_id?'<b>'+h(unitShort(b,t.next_unit_id))+'</b>':trackBadge(t))+(t.delivery_mode==='HOME'?' <span class="note">'+(t.category==='VOCAB'?'온라인':'숙제')+'</span>':'')+'</div>';}).join('');};
   return '<h1>학생</h1><p class="sub">이름을 클릭하면 현재 상태가 바로 보입니다. ★ = 오늘 교재 기본값.</p>'+
   '<div class="bar"><span class="sp"></span><a class="btn p" href="#/students?add=1">+ 학생 추가</a></div>'+
-  (q.add?'<div class="panel"><h2>학생 추가</h2>'+studentForm(null)+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="addStudent">추가하고 교재 설정하기</button><a class="btn" href="#/students">취소</a></div></div>':'')+
+  (q.add?'<div class="panel"><h2>학생 추가</h2>'+(()=>{const pre=q.from?byId(PROS(),q.from):null;return (pre?'<p class="note" style="margin:0 0 8px">📋 상담 차트 <b>'+h(pre.name)+'</b>의 정보를 가져왔습니다. 시간표와 교재만 정하면 등록이 끝납니다.</p>':'')+studentForm(null,pre);})()+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="addStudent">추가하고 교재 설정하기</button><a class="btn" href="#/students">취소</a></div></div>':'')+
   '<div class="panel tw"><table class="t"><thead><tr><th>이름</th><th>지점</th><th>AR</th><th>담임</th><th>진행 중인 교재 · 다음 Unit</th><th>Alert</th><th>상태</th><th></th></tr></thead><tbody>'+
   rows.map(s=>{const al=openAlertsOf(s.id).length;return '<tr><td><a href="#/student/'+s.id+'"><b>'+h(s.name)+'</b></a></td><td>'+h(nameOf(S.locations,s.location_id))+'</td><td>'+h(s.ar_level)+'</td><td>'+h(nameOf(S.teachers,s.homeroom_teacher_id))+'</td><td>'+cell(s)+'</td><td>'+(al?badge('b-bad',al):'')+'</td><td>'+({ACTIVE:'재원',PAUSED:'휴원',WITHDRAWN:'퇴원'}[s.status]||h(s.status))+'</td><td style="white-space:nowrap"><a href="#/map/'+s.id+'">맵</a> · <a href="#/chart/'+s.id+'">차트</a></td></tr>';}).join('')+
   '</tbody></table></div>';
@@ -1588,7 +1588,7 @@ function viewStudent(id,q){
     '<div class="hist">'+us.map((u,i)=>{const n=unitAttempts(histTrack,u.id);const cls=i<=doneIdx?'done':(u.id===histTrack.next_unit_id?'cur':'');return '<span class="'+cls+'" title="세션 '+n+'회">'+h(unitShort(b,u.id))+(n?' <small>×'+n+'</small>':'')+'</span>';}).join('')+'</div>'+
     '<p class="note" style="margin-top:8px">완료(초록) · 다음 Unit(금색) · ×n = 그 Unit에 쓴 세션 수. Override '+S.overrides.filter(o=>o.track_id===histTrack.id).length+'회 · Completion Test '+S.completion_tests.filter(x=>x.track_id===histTrack.id).length+'회</p>';}
   return '<div class="bar"><div><h1>'+h(s.name)+(s.grade?' <span class="note" style="font-size:14px;font-weight:400">'+h(s.grade)+'</span>':'')+'</h1><p class="sub" style="margin:0">AR '+h(s.ar_level)+' · 담임 '+h(nameOf(S.teachers,s.homeroom_teacher_id))+' · '+h(nameOf(S.locations,s.location_id))+' · '+(s.schedules.length?s.schedules.map(x=>WD[x.weekday]).join('·')+' '+h(s.schedules[0].time):'등원 요일 미설정')+(s.status!=='ACTIVE'?' · '+badge('b-muted',{PAUSED:'휴원',WITHDRAWN:'퇴원'}[s.status]||s.status):'')+'</p></div><span class="sp"></span>'+
-  '<a class="btn p" href="#/session/'+s.id+'">세션 입력</a><a class="btn b" href="#/map/'+s.id+'">성장 맵</a><a class="btn" href="#/chart/'+s.id+'">학생 차트</a><a class="btn" href="#/archive/'+s.id+'">아카이브</a><a class="btn" href="#/student/'+s.id+'?edit=tracks">교재 설정</a><a class="btn" href="#/student/'+s.id+'?edit=info">학생 정보</a></div>'+
+  '<a class="btn p" href="#/session/'+s.id+'">세션 입력</a><a class="btn b" href="#/map/'+s.id+'">성장 맵</a><a class="btn" href="#/chart/'+s.id+'">학생 차트</a><a class="btn" href="#/archive/'+s.id+'">아카이브</a>'+(()=>{const pr=canConsult()&&PROS().find(x=>x.student_id===s.id);return pr?'<a class="btn" href="#/consult/'+pr.id+'">📋 입학 상담</a>':'';})()+'<a class="btn" href="#/student/'+s.id+'?edit=tracks">교재 설정</a><a class="btn" href="#/student/'+s.id+'?edit=info">학생 정보</a></div>'+
   (q.edit==='tracks'?trackForm(s):'')+
   (q.edit==='info'?'<div class="panel"><h2>학생 정보</h2>'+studentForm(s)+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveStudent" data-id="'+s.id+'">저장</button><a class="btn" href="#/student/'+s.id+'">닫기</a></div></div>':'')+
   '<div class="panel"><h2>CURRENT STATE</h2><div class="tw"><table class="t"><thead><tr><th>교재</th><th>현재</th><th>다음</th><th>방식</th><th>상태</th></tr></thead><tbody>'+
@@ -2328,7 +2328,8 @@ const ACT={
     const s={id:uid('s'),name,grade:($('#sf_grade')&&$('#sf_grade').value.trim())||'',guardian_phone:($('#sf_phone')&&$('#sf_phone').value.trim())||'',location_id:$('#sf_loc').value,ar_level:ar,enrolled_at:enr,homeroom_teacher_id:$('#sf_tch').value,status:'ACTIVE',default_track_id:null,map_done:{},schedules:readSchedules()};
     S.students.push(s);if(ar>0)S.assessments.push({id:uid('as'),student_id:s.id,kind:'AR',date:enr,score:ar,level:'',detail:'',note:'입회 시 입력'});
     let n=0;for(const cat of CATS){const sel=$('#sf_b_'+cat);if(!sel||!sel.value)continue;const b=byId(S.books,sel.value);if(!b)continue;const u=Math.max(1,Math.floor(num($('#sf_u_'+cat)&&$('#sf_u_'+cat).value,1)));const us=unitsOf(b);const nextU=us[Math.min(u,us.length)-1];const cur=nextU?prevUnitOf(b,nextU.id):null;const t=addTrack(s.id,b.id,cur?cur.id:null,defaultMode(cat),enr);if(t&&t.delivery_mode==='ACADEMY'&&!s.default_track_id)s.default_track_id=t.id;n++;}
-    persist();toast('학생 추가'+(n?' · 교재 '+n+'권 설정됨':''));nav('student',s.id,n?{}:{edit:'tracks'});
+    const fromEl=$('#sf_from');const pr=fromEl&&fromEl.value?byId(PROS(),fromEl.value):null;if(pr){pr.status='ENROLLED';pr.student_id=s.id;pr.enrolled_at=enr;pr.updated_at=new Date().toISOString();S.chart_notes.push({id:uid('cn'),student_id:s.id,date:enr,teacher_id:myId(null),kind:'상담',text:'상담 차트에서 등록 (첫 상담 '+(pr.first_date||'')+', 상담 '+(pr.consults||[]).length+'회)'+(pr.concerns?' · 학부모 요청: '+pr.concerns:'')});}
+    persist();toast('학생 추가'+(pr?' · 상담 차트 연결됨':'')+(n?' · 교재 '+n+'권 설정됨':''));nav('student',s.id,n?{}:{edit:'tracks'});
   },
   saveStudent(el){
     const s=studentOf(el.dataset.id);if(!s)return;const name=$('#sf_name').value.trim();if(!name){toast('이름을 입력하세요.');return;}
@@ -2442,6 +2443,15 @@ const ACT={
   markPointsPaid(el){const date=el.dataset.date;const rows=pointRows(date,el.dataset.loc).filter(x=>x.diff!==0);if(!rows.length){toast('지급할 포인트가 없습니다.');return;}const by=myId(null);for(const x of rows){const id=ppId(x.s.id,date);let p=byId(PP(),id);if(!p){p={id,student_id:x.s.id,date,paid:0};PP().push(p);}p.paid=x.d.total;p.at=new Date().toISOString();p.by=by;}persist();toast(rows.length+'명 지급 완료로 기록');render();},
   async importOldReports(el){const ym=el.dataset.ym;if(!await ask(ymLabel(ym)+' 예전 원서반 리포트(영역 등급·문장)를 가져와 지난달 비교에 씁니다. EPL OS에서 이미 작성한 '+ymLabel(ym)+' 리포트는 건드리지 않습니다. 계속할까요?'))return;el.disabled=true;el.textContent='가져오는 중…';
     try{const st=await importOldReports(ym);await ask(ymLabel(ym)+' 예전 리포트 '+st.found+'건 중 '+st.added+'명 가져옴'+(st.kept?' · 이미 작성된 '+st.kept+'명은 그대로 둠':'')+(st.unmatched.length?'\n\n이름이 맞는 학생이 없어 건너뜀 ('+st.unmatched.length+'명): '+st.unmatched.join(', '):''),{alert:true});}catch(e){console.error(e);toast('가져오기 실패: '+e.message);}render();},
+  saveProspect(el){const id=el.dataset.id;let p=id?byId(PROS(),id):null;const name=($('#pf_name')&&$('#pf_name').value.trim())||'';if(!name){toast('학생 이름을 입력하세요.');const f=$('#pf_name');if(f)f.focus();return;}
+    const isNew=!p;if(isNew){p={id:uid('pr'),status:'CONSULTING',consults:[],created_at:new Date().toISOString(),created_by:myId(null)};PROS().push(p);}readProspectForm(p);persist();toast(isNew?'상담 차트를 만들었습니다':'차트 저장됨');nav('consult',p.id);},
+  addConsult(el){const p=byId(PROS(),el.dataset.id);if(!p)return;const note=$('#pc_note').value.trim();if(!note){toast('상담 내용을 입력하세요.');$('#pc_note').focus();return;}
+    if(!Array.isArray(p.consults))p.consults=[];p.consults.push({id:uid('pc'),date:$('#pc_date').value||todayISO(),kind:$('#pc_kind').value,note,next:$('#pc_next').value.trim(),next_date:$('#pc_next_date').value||'',by:myId(null)});p.updated_at=new Date().toISOString();persist();toast('상담 기록 추가');render();},
+  async delConsult(el){const p=byId(PROS(),el.dataset.id);if(!p)return;if(!await ask('이 상담 기록을 삭제할까요?'))return;p.consults=(p.consults||[]).filter(c=>c.id!==el.dataset.cid);persist();render();},
+  async setProspectStatus(el){const p=byId(PROS(),el.dataset.id);if(!p)return;const st=el.dataset.st;
+    if(st==='ENROLLED'){if(!await ask(p.name+' 학생을 등록합니다. 학생 추가 화면으로 넘어가 시간표·교재를 정하면 학생 목록에 들어갑니다.'))return;nav('students',null,{add:1,from:p.id});return;}
+    p.status=st;p.updated_at=new Date().toISOString();persist();toast(PS_L[st][0]+'(으)로 바꿈 · 차트는 그대로 남습니다');render();},
+  async delProspect(el){const p=byId(PROS(),el.dataset.id);if(!p)return;if(!await ask(p.name+' 상담 차트를 완전히 삭제합니다. 다시 올 수도 있다면 삭제 대신 [미등록 처리]를 권합니다. 삭제할까요?'))return;S.prospects=PROS().filter(x=>x.id!==p.id);persist();toast('차트 삭제됨');nav('consults');},
   markAllSent(el){for(const r of noticeRows(el.dataset.date,el.dataset.loc))r.x.sent=true;persist();toast('전체 보냄 처리');render();},
   print(){window.print();},
   navMore(){$('#nav').classList.toggle('open');renderNav();},
@@ -2675,12 +2685,66 @@ document.addEventListener('input',e=>{const el=e.target;if(el.classList.contains
   j.innerHTML=badge(res==='PASS'?'b-good':res==='CHECK'?'b-warn':'b-bad',p+'% · '+res+(res==='PASS'||(res==='CHECK'&&R.VOCAB_CHECK_MODE.mode!=='REPEAT')?' → 다음 Unit':' → 같은 Unit'));j.className='';
 });
 
-const ROUTES={login:viewLogin,books:viewBooks,home:viewHome,students:viewStudents,student:viewStudent,session:viewSession,chart:viewChart,map:viewMap,report:viewReport,reports:viewReports,curriculum:viewCurriculum,tests:viewTests,alerts:viewAlerts,admin:viewAdmin,notices:viewNotices,approvals:viewApprovals,manuals:viewManuals,manual:viewManual,authority:viewAuthority,dashboard:viewDashboard,timetable:viewTimetable,rank:viewRank,board:viewBoard};
-const NAV_TEACHER=[['home','오늘'],['students','학생'],['alerts','할 일'],['timetable','시간표','more'],['notices','알림장','more'],['books','교재 지급','more'],['reports','리포트','more'],['manuals','매뉴얼','more'],['rank','랭킹','more'],['curriculum','커리큘럼','more'],['tests','교재 시험','more']];
-const NAV_DIRECTOR=[['dashboard','대시보드'],['approvals','결정'],['alerts','할 일'],['students','학생'],['home','오늘','more'],['timetable','시간표','more'],['notices','알림장','more'],['books','교재 지급','more'],['reports','리포트','more'],['manuals','매뉴얼','more'],['rank','랭킹','more'],['authority','권한표','more'],['curriculum','커리큘럼','more'],['tests','교재 시험','more'],['admin','설정','more']];
-function navActive(){const n=route().name;return n==='session'?'home':(n==='student'||n==='chart'||n==='map')?'students':n==='report'?'reports':n==='manual'?'manuals':n;}
+// ===== 상담 차트 (신입생·상담) — 등록을 눌러야 학생이 되고, 등록하지 않아도 차트는 남는다 =====
+const PROS=()=>Array.isArray(S.prospects)?S.prospects:(S.prospects=[]);
+function canConsult(){const u=currentUser();return !!u&&(u.role==='DIRECTOR'||u.role==='STAFF');}
+const PS_L={CONSULTING:['상담 중','b-brass'],HOLD:['보류 · 고민 중','b-warn'],NOT_ENROLLED:['미등록','b-muted'],ENROLLED:['등록','b-good']};
+const PS_SRC=['지인 소개','재원생 형제·친구','블로그·검색','전단·현수막','지나가다','기타'];
+const PC_KIND=['방문','전화','문자·카톡'];
+const psBadge=p=>{const x=PS_L[p.status]||PS_L.CONSULTING;return badge(x[1],x[0]);};
+function prospectForm(p){p=p||{};
+  const tin=(id,label,ph,w)=>'<label class="f">'+label+'<input type="text" id="pf_'+id+'" value="'+h(p[id]||'')+'"'+(ph?' placeholder="'+h(ph)+'"':'')+(w?' style="width:'+w+'"':'')+'></label>';
+  const ta=(id,label,ph)=>'<label class="f" style="flex:1 1 100%">'+label+'<textarea id="pf_'+id+'" placeholder="'+h(ph||'')+'">'+h(p[id]||'')+'</textarea></label>';
+  const sec=t=>'<div class="rp-grp" style="flex:1 1 100%;margin-top:6px"><b>'+t+'</b></div>';
+  return '<div class="row" style="flex-wrap:wrap">'+
+   sec('① 기본 정보')+tin('name','학생 이름','홍길동','120px')+tin('grade','학년','5학년','80px')+tin('school','학교','○○초','120px')+
+   '<label class="f">지점<select id="pf_location_id">'+opt(S.locations,p.location_id||(S.locations[0]||{}).id)+'</select></label>'+
+   '<label class="f">첫 상담일<input type="date" id="pf_first_date" value="'+h(p.first_date||todayISO())+'"></label>'+
+   tin('guardian_name','학부모','어머니 / 아버지','110px')+tin('guardian_phone','학부모 연락처','010-0000-0000','150px')+tin('student_phone','학생 연락처','(선택)','140px')+
+   '<label class="f">알게 된 경로<select id="pf_source"><option value="">— 선택 —</option>'+PS_SRC.map(x=>'<option'+(p.source===x?' selected':'')+'>'+h(x)+'</option>').join('')+'</select></label>'+
+   sec('② 학습 이력 · 레벨')+ta('prev_study','이전 학습 (학원·기간·교재)','예: ○○어학원 2년, 리딩튜터 1까지, 문법은 처음')+
+   '<label class="f">레벨 테스트 AR<input type="number" step="0.1" id="pf_ar_level" value="'+h(p.ar_level!=null?p.ar_level:'')+'" style="width:90px"></label>'+tin('level_note','레벨 테스트 결과 메모','예: 단어 강함, 문장 구성 약함','320px')+
+   sec('③ 상담 내용')+ta('concerns','학부모 고민 · 요청 (주호소)','예: 문법이 약해서 중학교 대비가 걱정됨, 숙제 양 많지 않았으면')+
+   ta('assessment','원장 소견 · 추천 과정','예: AR 2.1 → 리딩튜터 스타터 2 + 그래머 인사이드 1, 주 3회 추천')+
+   tin('desired_schedule','희망 요일 · 시간','월수금 4시','200px')+
+  '</div>';}
+function readProspectForm(p){const g=id=>{const el=$('#pf_'+id);return el?el.value.trim():'';};
+  for(const k of ['name','grade','school','location_id','first_date','guardian_name','guardian_phone','student_phone','source','prev_study','level_note','concerns','assessment','desired_schedule'])p[k]=g(k);
+  const ar=g('ar_level');p.ar_level=ar===''?null:num(ar,null);p.updated_at=new Date().toISOString();return p;}
+function prospectNext(p){const c=(p.consults||[]).filter(x=>x.next_date).sort((a,b)=>b.date.localeCompare(a.date))[0];return c?{date:c.next_date,what:c.next||''}:null;}
+function viewConsults(q){if(!canConsult())return roleGate();
+  const tab=q.tab||'open';const all=PROS().slice();
+  const isOpen=p=>p.status==='CONSULTING'||p.status==='HOLD'||!p.status;
+  const list=all.filter(p=>tab==='all'?true:tab==='open'?isOpen(p):p.status===tab).sort((a,b)=>{const na=prospectNext(a),nb=prospectNext(b);return (na?na.date:'9999').localeCompare(nb?nb.date:'9999')||(b.first_date||'').localeCompare(a.first_date||'');});
+  const cnt=f=>all.filter(f).length;const today=todayISO();
+  const tabs=[['open','진행 중',cnt(isOpen)],['ENROLLED','등록',cnt(p=>p.status==='ENROLLED')],['NOT_ENROLLED','미등록',cnt(p=>p.status==='NOT_ENROLLED')],['all','전체',all.length]];
+  return '<h1>상담 차트</h1><p class="sub">신입생·상담 학생을 진료 차트처럼 기록합니다. <b>[등록하기]</b>를 눌러야 학생 목록에 들어가고, 등록하지 않아도 차트는 그대로 남아 다시 상담할 때 이어서 씁니다.</p>'+
+  '<div class="bar"><div class="tabs">'+tabs.map(([k,l,n])=>'<a href="#/consults?tab='+k+'" class="'+(k===tab?'on':'')+'">'+l+' '+n+'</a>').join('')+'</div><span class="sp"></span><a class="btn p" href="#/consults?add=1&tab='+tab+'">+ 신규 상담</a></div>'+
+  (q.add?'<div class="panel"><h2>신규 상담 차트</h2>'+prospectForm(null)+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveProspect" data-id="">차트 만들기</button><a class="btn" href="#/consults">취소</a><span class="note">이름만 써도 저장됩니다. 나머지는 나중에 채워도 돼요.</span></div></div>':'')+
+  (list.length?'<div class="panel tw"><table class="t"><thead><tr><th>이름</th><th>학년 · 학교</th><th>학부모 연락처</th><th>첫 상담</th><th>상담</th><th>다음 할 일</th><th>상태</th><th></th></tr></thead><tbody>'+
+   list.map(p=>{const nx=prospectNext(p);const due=nx&&p.status!=='ENROLLED'&&p.status!=='NOT_ENROLLED'?(nx.date<today?badge('b-bad',fmtDateK(nx.date)+' 지남'):nx.date===today?badge('b-warn','오늘'):badge('b-muted',fmtDateK(nx.date)))+' <span class="note">'+h(nx.what)+'</span>':'<span class="note">—</span>';
+    return '<tr><td><a href="#/consult/'+p.id+'"><b>'+h(p.name)+'</b></a></td><td>'+h([p.grade,p.school].filter(Boolean).join(' · '))+'</td><td>'+h(p.guardian_phone||'')+'</td><td>'+h(p.first_date?fmtDateK(p.first_date):'')+'</td><td>'+((p.consults||[]).length)+'회</td><td>'+due+'</td><td>'+psBadge(p)+'</td><td><a class="btn s" href="#/consult/'+p.id+'">열기</a></td></tr>';}).join('')+'</tbody></table></div>':'<div class="empty">'+(tab==='open'?'진행 중인 상담이 없습니다. 새 학생이 오면 [+ 신규 상담]을 누르세요.':'해당하는 차트가 없습니다.')+'</div>');}
+function viewConsult(id,q){if(!canConsult())return roleGate();const p=byId(PROS(),id);if(!p)return notFound('상담 차트');
+  const st=p.status||'CONSULTING';const stu=p.student_id?studentOf(p.student_id):null;
+  const cs=(p.consults||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id>a.id?1:-1));
+  const stBtn=(k,l,cls)=>st===k?'':'<button class="btn s'+(cls?' '+cls:'')+'" data-act="setProspectStatus" data-id="'+p.id+'" data-st="'+k+'">'+l+'</button>';
+  const head='<div class="bar"><div><h1>'+h(p.name)+' '+psBadge(p)+'</h1><p class="sub" style="margin:0">'+h([p.grade,p.school,nameOf(S.locations,p.location_id)].filter(Boolean).join(' · '))+(p.first_date?' · 첫 상담 '+h(fmtDateK(p.first_date)):'')+'</p></div><span class="sp"></span>'+
+   (st==='ENROLLED'?(stu?'<a class="btn p" href="#/student/'+stu.id+'">학생 페이지 →</a>':'<span class="note">연결된 학생이 삭제됨</span>'):'<button class="btn p" data-act="setProspectStatus" data-id="'+p.id+'" data-st="ENROLLED">✅ 등록하기</button>'+stBtn('HOLD','보류 · 고민 중')+stBtn('NOT_ENROLLED','미등록 처리')+stBtn('CONSULTING','다시 상담 중'))+
+   '<a class="btn" href="#/consults">목록</a></div>';
+  const log='<div class="panel"><h2>상담 기록 <span class="note">'+cs.length+'회</span></h2>'+
+   '<div class="row" style="flex-wrap:wrap"><label class="f">날짜<input type="date" id="pc_date" value="'+todayISO()+'"></label><label class="f">방법<select id="pc_kind">'+PC_KIND.map(k=>'<option>'+k+'</option>').join('')+'</select></label>'+
+   '<label class="f" style="flex:1 1 100%">상담 내용<textarea id="pc_note" placeholder="오늘 나눈 이야기, 학부모 반응, 결정 사항"></textarea></label>'+
+   '<label class="f">다음 할 일<input type="text" id="pc_next" placeholder="예: 레벨테스트 결과 전화" style="width:240px"></label><label class="f">언제<input type="date" id="pc_next_date"></label>'+
+   '<button class="btn p" data-act="addConsult" data-id="'+p.id+'" style="align-self:flex-end">기록 추가</button></div>'+
+   (cs.length?'<div style="margin-top:12px">'+cs.map(c=>'<div style="border-top:1px solid var(--line-2);padding:10px 0"><div class="bar" style="margin:0"><b>'+h(fmtDateK(c.date))+'</b> '+badge('b-muted',c.kind||'방문')+' <span class="note">'+h(c.by?nameOf(S.teachers,c.by):'')+'</span><span class="sp"></span><button class="btn s" data-act="delConsult" data-id="'+p.id+'" data-cid="'+c.id+'">삭제</button></div><div style="white-space:pre-wrap;margin-top:4px">'+h(c.note)+'</div>'+(c.next?'<div class="note" style="margin-top:4px">→ 다음: '+h(c.next)+(c.next_date?' ('+h(fmtDateK(c.next_date))+')':'')+'</div>':'')+'</div>').join('')+'</div>':'<p class="note" style="margin:10px 0 0">아직 상담 기록이 없습니다.</p>')+'</div>';
+  const info='<div class="panel"><h2>차트 정보</h2>'+prospectForm(p)+'<div class="bar" style="margin-top:12px"><button class="btn p" data-act="saveProspect" data-id="'+p.id+'">차트 저장</button>'+(st!=='ENROLLED'?'<span class="sp"></span><button class="btn s" data-act="delProspect" data-id="'+p.id+'" style="color:var(--bad)">차트 삭제</button>':'')+'</div></div>';
+  return head+log+info;}
+const ROUTES={login:viewLogin,books:viewBooks,home:viewHome,students:viewStudents,student:viewStudent,session:viewSession,chart:viewChart,map:viewMap,report:viewReport,reports:viewReports,curriculum:viewCurriculum,tests:viewTests,alerts:viewAlerts,admin:viewAdmin,notices:viewNotices,approvals:viewApprovals,manuals:viewManuals,manual:viewManual,authority:viewAuthority,dashboard:viewDashboard,timetable:viewTimetable,consults:viewConsults,consult:viewConsult,rank:viewRank,board:viewBoard};
+const NAV_TEACHER=[['home','오늘'],['students','학생'],['alerts','할 일'],['consults','상담 차트','more'],['timetable','시간표','more'],['notices','알림장','more'],['books','교재 지급','more'],['reports','리포트','more'],['manuals','매뉴얼','more'],['rank','랭킹','more'],['curriculum','커리큘럼','more'],['tests','교재 시험','more']];
+const NAV_DIRECTOR=[['dashboard','대시보드'],['approvals','결정'],['alerts','할 일'],['students','학생'],['consults','상담 차트','more'],['home','오늘','more'],['timetable','시간표','more'],['notices','알림장','more'],['books','교재 지급','more'],['reports','리포트','more'],['manuals','매뉴얼','more'],['rank','랭킹','more'],['authority','권한표','more'],['curriculum','커리큘럼','more'],['tests','교재 시험','more'],['admin','설정','more']];
+function navActive(){const n=route().name;return n==='session'?'home':(n==='student'||n==='chart'||n==='map')?'students':n==='report'?'reports':n==='manual'?'manuals':n==='consult'?'consults':n;}
 addEventListener('click',e=>{const n=$('#nav');if(n&&n.classList.contains('open')&&!e.target.closest('.more-wrap')){n.classList.remove('open');renderNav();}});
-function renderNav(){const dir=isDirector();const items=dir?NAV_DIRECTOR:NAV_TEACHER;const pend=(S.approvals||[]).filter(a=>!a.decision).length;const todo=(S.alerts||[]).filter(a=>a.status==='OPEN'||a.status==='ACKNOWLEDGED').length;let needN=0;try{needN=issueNeeds().length;}catch(e){console.error(e);}
+function renderNav(){const dir=isDirector();const items=(dir?NAV_DIRECTOR:NAV_TEACHER).filter(x=>x[0]!=='consults'||canConsult());const pend=(S.approvals||[]).filter(a=>!a.decision).length;const todo=(S.alerts||[]).filter(a=>a.status==='OPEN'||a.status==='ACKNOWLEDGED').length;let needN=0;try{needN=issueNeeds().length;}catch(e){console.error(e);}
   const navEl=$('#nav');const act=navActive();const open=navEl.classList.contains('open');const link=([r,l,m])=>'<a href="#/'+r+'" data-r="'+r+'"'+(m?' class="more'+(r===act?' on':'')+'"':(r===act?' class="on"':''))+'>'+l+(r==='approvals'&&pend?' <span class="badge b-brass" style="padding:0 6px">'+pend+'</span>':'')+(r==='alerts'&&todo?' <span class="badge b-bad" style="padding:0 6px">'+todo+'</span>':'')+(r==='books'&&needN?' <span class="badge b-brass" style="padding:0 6px">'+needN+'</span>':'')+'</a>';const moreN=items.some(([r,,m])=>m&&r==='books'&&needN);const moreAct=items.find(x=>x[2]&&x[0]===act);navEl.innerHTML=items.filter(x=>!x[2]).map(link).join('')+(moreAct?link([moreAct[0],moreAct[1]]):'')+'<span class="more-wrap"><a href="#" class="more-btn" data-act="navMore" aria-expanded="'+open+'">더보기 '+(open?'▴':'▾')+(moreN?' <span class="badge b-brass" style="padding:0 6px">'+needN+'</span>':'')+'</a><span class="more-menu">'+items.filter(x=>x[2]).map(link).join('')+'</span></span>';const me=currentUser();const w=$('#whoami');if(w)w.textContent=me?me.name+' · '+roleL(me):'';cloudSetStatus(cloudStatus.text,cloudStatus.cls);}
 function render(){
   const r=route();const me=currentUser();
@@ -2688,7 +2752,7 @@ function render(){
   if(!me&&r.name!=='board'){document.body.classList.add('login');document.body.classList.remove('kiosk');$('#app').innerHTML=viewLogin(r.q);const f=$('#lg_user');if(f)f.focus();return;}
   document.body.classList.remove('login');if(r.name==='login'){nav(isDirector()?'dashboard':'home');return;}
   const fn=ROUTES[r.name]||viewHome;let html;
-  try{html=(r.name==='student'||r.name==='session'||r.name==='chart'||r.name==='map'||r.name==='report'||r.name==='manual')?fn(r.id,r.q):fn(r.q);}catch(err){console.error(err);html='<div class="empty">화면을 그리는 중 오류가 났습니다: '+h(err.message)+'<br><br><button class="btn" data-act="reset">시드 데이터로 초기화</button></div>';}
+  try{html=(r.name==='student'||r.name==='session'||r.name==='chart'||r.name==='map'||r.name==='report'||r.name==='manual'||r.name==='consult')?fn(r.id,r.q):fn(r.q);}catch(err){console.error(err);html='<div class="empty">화면을 그리는 중 오류가 났습니다: '+h(err.message)+'<br><br><button class="btn" data-act="reset">시드 데이터로 초기화</button></div>';}
   $('#app').innerHTML=html;hydratePhotos();document.body.classList.toggle('kiosk',r.name==='board');clearInterval(render._bd);if(r.name==='board')render._bd=setInterval(()=>{const c=$('#bd_clock');if(c)c.textContent=new Date().toTimeString().slice(0,5);},30000);
   if(render._r!==r.name){$('#nav').classList.remove('open');render._r=r.name;}
   try{renderNav();}catch(e){console.error(e);$('#nav').innerHTML=(isDirector()?NAV_DIRECTOR:NAV_TEACHER).map(([r,l])=>'<a href="#/'+r+'" data-r="'+r+'">'+l+'</a>').join('');}document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.r===navActive()));
